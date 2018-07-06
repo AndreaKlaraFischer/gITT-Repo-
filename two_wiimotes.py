@@ -15,23 +15,26 @@ class WiimoteGame(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.loop_timer = QtCore.QTimer()
-        self.initUI()
         self.init_pygame()
         self.connect_wiimotes()
 
-    # Init the Window
-    def initUI(self):
-        layout = QtWidgets.QVBoxLayout()
-        self.setWindowTitle("ITT Final Project")
-        self.gestures = QtWidgets.QLabel("Waiting for Wiimote connection...")
-        layout.addWidget(self.gestures)
-        self.window().setLayout(layout)
-        self.window().resize(600,600)
-        self.show()
+
 
     # Prepare the audio files
     def init_pygame(self):
         pygame.init()
+        self.screen = pygame.display.set_mode((500,500))
+        pygame.display.set_caption('ITT Final Project')
+        self.background = pygame.Surface(self.screen.get_size())
+        self.background = self.background.convert()
+        self.background.fill((250,250,250))
+        font = pygame.font.Font(None, 36)
+        self.text = font.render("Hello", 1, (10,10,10))
+        textpos = self.text.get_rect()
+        textpos.centerx = self.background.get_rect().centerx
+        self.background.blit(self.text, textpos)
+        self.screen.blit(self.background, (0,0))
+        pygame.display.flip()
         try:
             # Init Sounds here (the soundfiles need to be in folder "assets"
             #pygame.mixer.music.load(os.path.join("assets", "instrumental.wav"))
@@ -62,12 +65,7 @@ class WiimoteGame(QtWidgets.QWidget):
         sound = self.vocals[vocal_name]
         sound.play()
 
-    # Show hints on the UI explaining which button causes which sound
-    def set_button_labels(self, label_up, label_down, label_left, label_right):
-        self.ui.button_up.setText(label_up)
-        self.ui.button_down.setText(label_down)
-        self.ui.button_left.setText(label_left)
-        self.ui.button_right.setText(label_right)
+
 
     # Starting the game loop
     def start_loop(self):
@@ -76,6 +74,7 @@ class WiimoteGame(QtWidgets.QWidget):
         self.prediction_values = [[], [], []]
         self.last_prediction = "Waiting for data..."
         self.category_list = []
+        self.munition_counter = 20
         self.new_training_values = [[], [], []]
         self.prediction_values = [[], [], []]
         self.c = svm.SVC()
@@ -83,7 +82,7 @@ class WiimoteGame(QtWidgets.QWidget):
         self.qp = QtGui.QPainter()
         self.loop_timer.setSingleShot(False)
         self.loop_timer.timeout.connect(self.loop_iteration)
-        self.loop_timer.start(50)
+        self.loop_timer.start(35)
 
 
 
@@ -101,13 +100,26 @@ class WiimoteGame(QtWidgets.QWidget):
             # todo: draw a shield on the screen --> limit size and duration
         else:
             self.game_mode = "shoot"
+            # disables drawing when shooted
+            if self.wm_pointer.buttons['B']:
+                # if munition available, allow shooting
+                if self.munition_counter > 0:
+                    self.munition_counter -= 1
+                else:
+                    print("shooting not possible, reloading necessary")
             # todo: track enemy position
             # todo: track pointer position
-            # todo: check for shooting button click (can perhaps be replaced with game_mode variable?)
 
         # todo: add check for shields
         # todo: check for collision and handle lives etc.
         self.recognize_activity(self.wm_pointer.accelerometer)
+
+
+        # necessary for closing the window in pygame
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
 
     def recognize_activity(self, accelerometer):
         x_acc = accelerometer[0]
@@ -115,12 +127,27 @@ class WiimoteGame(QtWidgets.QWidget):
         z_acc = accelerometer[2]
         #print(x_acc,y_acc,z_acc)
 
-        # todo: if available recognizing should be started, and if not add training data with gesture name
+        # todo: if available, recognizing should be started, and if not add training data with gesture name
         # checks for available training data.
         self.read_data_from_csv()
-        predicted_activity = self.predict_activity(x_acc,y_acc,z_acc)
-        self.gestures.setText(predicted_activity)
+        self.predicted_activity = self.predict_activity(x_acc,y_acc,z_acc)
+        self.updateMunitionDisplay()
 
+    def updateMunitionDisplay(self):
+        self.background.fill((250, 250, 250))
+        font = pygame.font.Font(None, 36)
+        self.text = font.render(
+            "Gesture: " + self.predicted_activity + " Munition: " + str(self.munition_counter) + "/20", 1, (10, 10, 10))
+        textpos = self.text.get_rect()
+        textpos.centerx = self.background.get_rect().centerx
+        self.background.blit(self.text, textpos)
+        self.screen.blit(self.background, (0, 0))
+
+        if self.predicted_activity == "reload":
+            if self.munition_counter != 20:
+                self.munition_counter = 20
+
+        pygame.display.flip()
 
     def get_categories(self):
         csv_files = glob.glob("*.csv")  # get all csv files from the directory
@@ -207,8 +234,6 @@ class WiimoteGame(QtWidgets.QWidget):
             self.prediction_values[0].append(x)
             self.prediction_values[1].append(y)
             self.prediction_values[2].append(z)
-            print(self.last_prediction)
-
             return self.last_prediction
         else:
             #print(str(self.minlen) + " Values collected:")
@@ -223,13 +248,13 @@ class WiimoteGame(QtWidgets.QWidget):
             # This line is taken from the "Wiimote - FFT - SVM" notebook from Grips
             freq = [np.abs(fft(avg) / len(avg))[1:len(avg) // 2]]
             self.last_prediction = str(self.c.predict(freq)[0])
-            print(self.last_prediction)
             return self.last_prediction
 
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
     wiimote_game = WiimoteGame()
+
     sys.exit(app.exec_())
 
 
