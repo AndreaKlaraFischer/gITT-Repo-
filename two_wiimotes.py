@@ -9,6 +9,18 @@ import numpy as np
 from scipy import fft
 from sklearn import svm
 
+# from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self):
+        # todo: create global constants for width and height
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.Surface((50, 50))
+        self.image.fill((250,0,0))
+        self.rect = self.image.get_rect()
+        self.rect.center = (500 / 2 / 2, 500 / 2)
+
+    def update(self):
+        self.rect.x += 1
 
 class WiimoteGame(QtWidgets.QWidget):
 
@@ -23,17 +35,21 @@ class WiimoteGame(QtWidgets.QWidget):
     # Prepare the audio files
     def init_pygame(self):
         pygame.init()
+
         self.screen = pygame.display.set_mode((500,500))
         pygame.display.set_caption('ITT Final Project')
-        self.background = pygame.Surface(self.screen.get_size())
-        self.background = self.background.convert()
-        self.background.fill((250,250,250))
-        font = pygame.font.Font(None, 36)
-        self.text = font.render("Hello", 1, (10,10,10))
-        textpos = self.text.get_rect()
-        textpos.centerx = self.background.get_rect().centerx
-        self.background.blit(self.text, textpos)
-        self.screen.blit(self.background, (0,0))
+
+        self.drawInfoLine("Waiting for gesture ... ")
+        self.drawGameCanvas()
+        self.drawMunitionLine("20/20")
+
+        # adds an enemy to the canvas. A sprite group is able to hold multiple sprites, i.e. enemies
+        self.all_sprites = pygame.sprite.Group()
+        enemy = Enemy()
+        self.all_sprites.add(enemy)
+        self.all_sprites.draw(self.screen)
+
+        # updates complete pygame display
         pygame.display.flip()
         try:
             # Init Sounds here (the soundfiles need to be in folder "assets"
@@ -42,6 +58,39 @@ class WiimoteGame(QtWidgets.QWidget):
         except pygame.error:
             print("Missing audio file!")
             sys.exit()
+
+    def drawInfoLine(self,text):
+        self.info_line_top = pygame.Surface((500, 50))
+        self.info_line_top = self.info_line_top.convert()
+        self.info_line_top.fill((250, 250, 250))
+        font = pygame.font.Font(None, 36)
+        self.text = font.render(text, 1, (10, 10, 10))
+        textpos = self.text.get_rect()
+        textpos.centerx = self.info_line_top.get_rect().centerx
+        self.info_line_top.blit(self.text, textpos)
+        self.screen.blit(self.info_line_top, (0, 0))
+
+
+
+
+    def drawGameCanvas(self):
+        self.game_canvas = pygame.Surface((500, 500))
+        # self.game_canvas = self.game_canvas.convert()
+        self.screen.blit(self.game_canvas, (0, 50))
+
+    def drawMunitionLine(self,text):
+        # todo: replace numerical display later with munition forms, e.g. small rects
+        self.munition_line = pygame.Surface((500, 50))
+        # self.munition_line = self.munition_line.convert()
+        self.munition_line.fill((250,250,250))
+        font = pygame.font.Font(None, 36)
+        self.munition_text = font.render(text, 1, (10, 10, 10))
+        munition_text_rect = self.munition_text.get_rect()
+        munition_text_rect.centerx = self.munition_line.get_rect().centerx
+        self.munition_line.blit(self.munition_text, munition_text_rect)
+        self.screen.blit(self.munition_line, (0, 450))
+
+
 
     # Start the pairing process, like in wiimote_demo.py
     def connect_wiimotes(self):
@@ -97,7 +146,7 @@ class WiimoteGame(QtWidgets.QWidget):
         # handles drawing mode and disables shooting while drawing
         if self.wm_pointer.buttons['A']:
             self.game_mode = "draw"
-            # todo: draw a shield on the screen --> limit size and duration
+            # todo: draw a shield on the screen --> limit size and duration of appearance
         else:
             self.game_mode = "shoot"
             # disables drawing when shooted
@@ -112,8 +161,15 @@ class WiimoteGame(QtWidgets.QWidget):
 
         # todo: add check for shields
         # todo: check for collision and handle lives etc.
+
+        # updates the enemies and moves them
+        self.all_sprites.update()
+        self.screen.fill((100, 100, 100))
+        self.all_sprites.draw(self.screen)
         self.recognize_activity(self.wm_pointer.accelerometer)
 
+
+        pygame.display.flip()
 
         # necessary for closing the window in pygame
         for event in pygame.event.get():
@@ -131,23 +187,21 @@ class WiimoteGame(QtWidgets.QWidget):
         # checks for available training data.
         self.read_data_from_csv()
         self.predicted_activity = self.predict_activity(x_acc,y_acc,z_acc)
-        self.updateMunitionDisplay()
 
-    def updateMunitionDisplay(self):
-        self.background.fill((250, 250, 250))
-        font = pygame.font.Font(None, 36)
-        self.text = font.render(
-            "Gesture: " + self.predicted_activity + " Munition: " + str(self.munition_counter) + "/20", 1, (10, 10, 10))
-        textpos = self.text.get_rect()
-        textpos.centerx = self.background.get_rect().centerx
-        self.background.blit(self.text, textpos)
-        self.screen.blit(self.background, (0, 0))
+        # updates info line on top and munition line on bottom of the game canvas
+        self.drawInfoLine("Gesture: " + self.predicted_activity)
+        self.drawMunitionLine(str(self.munition_counter) + "/20")
+        pygame.display.update(self.munition_line.get_rect())
+        pygame.display.update(self.info_line_top.get_rect())
 
         if self.predicted_activity == "reload":
             if self.munition_counter != 20:
                 self.munition_counter = 20
 
-        pygame.display.flip()
+
+
+
+
 
     def get_categories(self):
         csv_files = glob.glob("*.csv")  # get all csv files from the directory
