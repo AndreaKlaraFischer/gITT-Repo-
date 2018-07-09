@@ -11,21 +11,81 @@ from sklearn import svm
 
 # from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self):
+    def __init__(self,all_sprites):
         # todo: create global constants for width and height
         pygame.sprite.Sprite.__init__(self)
+        self.all_sprites = all_sprites
+
         self.image = pygame.Surface((50, 50))
         self.image.fill((250,0,0))
         self.rect = self.image.get_rect()
-        self.rect.center = (500 / 2 / 2, 500 / 2)
+        self.rect.center = (10, 100)
 
     def update(self):
-        self.rect.x += 1
+        self.rect.x += 2
+
+    def shoot(self):
+        bullet = Bullet(self.rect.centerx, self.rect.bottom, 10)
+        self.all_sprites.add(bullet)
+        # bullets.add(bullet)
+
+# from http://kidscancode.org/blog/2016/08/pygame_shmup_part_1/
+class Player(pygame.sprite.Sprite):
+    def __init__(self, all_sprites):
+        pygame.sprite.Sprite.__init__(self)
+        self.all_sprites = all_sprites
+        self.image = pygame.Surface((50, 40))
+        self.image.fill((0,250,0))
+        self.rect = self.image.get_rect()
+        self.rect.centerx = 500 / 2
+        self.rect.bottom = 500 - 100
+        self.speedx = 0
+
+    def update(self):
+        self.speedx = 0
+        # at the moment the movement of the player is handled via left and right arrows
+        keystate = pygame.key.get_pressed()
+        if keystate[pygame.K_LEFT]:
+            self.speedx = -8
+        if keystate[pygame.K_RIGHT]:
+            self.speedx = 8
+        self.rect.x += self.speedx
+        # prevents the player to get outside of the screen
+        if self.rect.right > 500:
+            # todo: set to pause mode
+            self.rect.right = 500
+        if self.rect.left < 0:
+            # todo: set to pause mode
+            self.rect.left = 0
+
+    def shoot(self):
+        bullet = Bullet(self.rect.centerx, self.rect.top, -10)
+        self.all_sprites.add(bullet)
+        #bullets.add(bullet)
+
+# from http://kidscancode.org/blog/2016/08/pygame_shmup_part_3/
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y, speed):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.Surface((10, 20))
+        self.image.fill((0,0,250))
+        self.rect = self.image.get_rect()
+        self.rect.bottom = y
+        self.rect.centerx = x
+        self.speedy = speed
+
+    def update(self):
+        self.rect.y += self.speedy
+        # kill if it moves off the top of the screen
+        if self.rect.bottom < 0:
+            self.kill()
 
 class WiimoteGame(QtWidgets.QWidget):
 
-    def __init__(self):
+    def __init__(self,all_sprites):
         super().__init__()
+        self.all_sprites = all_sprites
+
         self.loop_timer = QtCore.QTimer()
         self.init_pygame()
         self.connect_wiimotes()
@@ -44,10 +104,14 @@ class WiimoteGame(QtWidgets.QWidget):
         self.drawMunitionLine("20/20")
 
         # adds an enemy to the canvas. A sprite group is able to hold multiple sprites, i.e. enemies
-        self.all_sprites = pygame.sprite.Group()
-        enemy = Enemy()
-        self.all_sprites.add(enemy)
+        self.enemy = Enemy(self.all_sprites)
+        self.all_sprites.add(self.enemy)
+
+        self.player = Player(self.all_sprites)
+        self.all_sprites.add(self.player)
+
         self.all_sprites.draw(self.screen)
+
 
         # updates complete pygame display
         pygame.display.flip()
@@ -124,6 +188,10 @@ class WiimoteGame(QtWidgets.QWidget):
         self.last_prediction = "Waiting for data..."
         self.category_list = []
         self.munition_counter = 20
+        self.shooter_delay = 0
+        self.ticks_between_two_bullets = 0
+
+        self.enemy_shooting_delay = 0
         self.new_training_values = [[], [], []]
         self.prediction_values = [[], [], []]
         self.c = svm.SVC()
@@ -135,25 +203,48 @@ class WiimoteGame(QtWidgets.QWidget):
 
 
 
-    # One iteration of the loop. Check wiimote rotation, update ui, check for button presses.
+    # One iteration of the loop
     def loop_iteration(self):
         #print("A: " + str(self.wm_pointer.accelerometer[1]))
         #print("B: " + str(self.wm_tracker.accelerometer[1]))
 
-        # todo: handle enemies: every few ticks they will shoot based on their location
+        #handles enemies: every few ticks they will shoot based on their location
+        # handles delay between shooting of enemies and no shooting
+        if self.enemy_shooting_delay <20:
+            self.enemy_shooting_delay += 1
+        elif (self.enemy_shooting_delay >= 20) & (self.enemy_shooting_delay < 35):
+            # handles delay between two enemy bullets
+            self.enemy_shooting_delay += 1
+            if self.ticks_between_two_bullets < 3:
+                self.ticks_between_two_bullets += 1
+            else:
+                self.ticks_between_two_bullets = 0
+                self.enemy.shoot()
+        else:
+            self.enemy_shooting_delay =0
 
 
         # handles drawing mode and disables shooting while drawing
+        # allows drawing when the A button on the wiimote is pressed
         if self.wm_pointer.buttons['A']:
             self.game_mode = "draw"
             # todo: draw a shield on the screen --> limit size and duration of appearance
         else:
             self.game_mode = "shoot"
             # disables drawing when shooted
+            # allows shooting when the B button on the wiimote is pressed
             if self.wm_pointer.buttons['B']:
                 # if munition available, allow shooting
                 if self.munition_counter > 0:
-                    self.munition_counter -= 1
+                    # adds a delay to firing a bullet so that it will not be fired with each tick, but
+                    # with every fifth tick, so that is results not in a long bullet line, but has spaces
+                    # between each bullet
+                    if(self.shooter_delay < 3):
+                        self.shooter_delay += 1
+                    else:
+                        self.munition_counter -= 1
+                        self.player.shoot()
+                        self.shooter_delay = 0
                 else:
                     print("shooting not possible, reloading necessary")
             # todo: track enemy position
@@ -168,7 +259,6 @@ class WiimoteGame(QtWidgets.QWidget):
         self.all_sprites.draw(self.screen)
         self.recognize_activity(self.wm_pointer.accelerometer)
 
-
         pygame.display.flip()
 
         # necessary for closing the window in pygame
@@ -176,6 +266,7 @@ class WiimoteGame(QtWidgets.QWidget):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 exit()
+
 
     def recognize_activity(self, accelerometer):
         x_acc = accelerometer[0]
@@ -197,10 +288,6 @@ class WiimoteGame(QtWidgets.QWidget):
         if self.predicted_activity == "reload":
             if self.munition_counter != 20:
                 self.munition_counter = 20
-
-
-
-
 
 
     def get_categories(self):
@@ -307,7 +394,9 @@ class WiimoteGame(QtWidgets.QWidget):
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
-    wiimote_game = WiimoteGame()
+    all_sprites = pygame.sprite.Group()
+
+    wiimote_game = WiimoteGame(all_sprites)
 
     sys.exit(app.exec_())
 
