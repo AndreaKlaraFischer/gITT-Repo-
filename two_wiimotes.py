@@ -31,6 +31,13 @@ class Enemy(pygame.sprite.Sprite):
         self.all_sprites.add(bullet)
         self.enemy_bullets.add(bullet)
 
+    def move_towards_player(self, Player):
+        dx, dy = self.rect.x - Player.rect.x, self.rect.y - Player.rect.y
+        dist = math.hypot(dx, dy)
+        dx, dy = dx / dist, dy / dist
+        self.rect.x += dx * self.speed
+        self.rect.y += dy * self.speed
+
 # from http://kidscancode.org/blog/2016/08/pygame_shmup_part_1/
 class Player(pygame.sprite.Sprite):
     def __init__(self, all_sprites, player_bullets):
@@ -90,6 +97,7 @@ class WiimoteGame(QtWidgets.QWidget):
 
         self.loop_timer = QtCore.QTimer()
         self.init_pygame()
+        self.input_device = None
         self.connect_wiimotes()
 
 
@@ -181,12 +189,13 @@ class WiimoteGame(QtWidgets.QWidget):
             self.wm_tracker = wiimote.connect(tracker, name_tracker)
             self.wm_pointer = wiimote.connect(pointer, name_pointer)
             self.wm = self.wm_pointer
+            self.input_device = "wiimote"
 
             # As soon as the Wiimote is connected, start the loop
             self.start_loop()
         else:
-            print("Need two Mac Adresses")
-            sys.exit()
+            self.input_device = "mouse"
+            self.start_loop()
 
     # Play a sound saved in the vocals dictionary
     def play_sound(self, vocal_name):
@@ -197,10 +206,10 @@ class WiimoteGame(QtWidgets.QWidget):
 
     # Starting the game loop
     def start_loop(self):
-        self.wm_pointer.speaker.beep()
         self.game_mode = "shoot"
         self.prediction_values = [[], [], []]
         self.last_prediction = "Waiting for data..."
+        self.predicted_activity = "-"
         self.category_list = []
         self.munition_counter = 20
         self.lives = 5
@@ -228,28 +237,18 @@ class WiimoteGame(QtWidgets.QWidget):
         self.enemy_shoot(self.enemy)
         self.enemy_shoot(self.enemy2)
 
-
-        # handles drawing mode and disables shooting while drawing
-        # allows drawing when the A button on the wiimote is pressed
-        if self.wm_pointer.buttons['A']:
-            self.game_mode = "draw"
-            # todo: draw a shield on the screen --> limit size and duration of appearance
-        else:
-            self.game_mode = "shoot"
-            # disables drawing when shooted
-            # allows shooting when the B button on the wiimote is pressed
-            if self.wm_pointer.buttons['B']:
-                # if munition available, allow shooting
-                if self.munition_counter > 0:
-                    # adds a delay to firing a bullet so that it will not be fired with each tick, but
-                    # with every third tick, so that is results not in a long bullet line, but has spaces
-                    # between each bullet
-                    if(self.shooter_delay < 3):
-                        self.shooter_delay += 1
-                    else:
-                        self.munition_counter -= 1
-                        self.player.shoot()
-                        self.shooter_delay = 0
+        if self.input_device == "wiimote":
+            # handles drawing mode and disables shooting while drawing
+            # allows drawing when the A button on the wiimote is pressed
+            if self.wm_pointer.buttons['A']:
+                self.game_mode = "draw"
+                # todo: draw a shield on the screen --> limit size and duration of appearance
+            else:
+                self.game_mode = "shoot"
+                # disables drawing when shooted
+                # allows shooting when the B button on the wiimote is pressed
+                if self.wm_pointer.buttons['B']:
+                    self.player_shoot()
                 else:
                     print("shooting not possible, reloading necessary")
 
@@ -280,15 +279,42 @@ class WiimoteGame(QtWidgets.QWidget):
 
         self.screen.fill((100, 100, 100))
         self.all_sprites.draw(self.screen)
-        self.recognize_activity(self.wm_pointer.accelerometer)
+        if self.input_device == "wiimote":
+            self.recognize_activity(self.wm_pointer.accelerometer)
+
+        # updates info line on top and munition line on bottom of the game canvas
+        self.drawInfoLine("Lives: " + str(self.lives) + "/5 Gesture: " + self.predicted_activity + " Highscore: " + str(
+                    self.highscore))
+        self.drawMunitionLine(str(self.munition_counter) + "/20")
+        pygame.display.update(self.munition_line.get_rect())
+        pygame.display.update(self.info_line_top.get_rect())
 
         pygame.display.flip()
 
+        self.init_pygame_events()
+
+    def init_pygame_events(self):
         # necessary for closing the window in pygame
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    self.player.shoot()
+
+    def player_shoot(self):
+        # if munition available, allow shooting
+        if self.munition_counter > 0:
+            # adds a delay to firing a bullet so that it will not be fired with each tick, but
+            # with every third tick, so that is results not in a long bullet line, but has spaces
+            # between each bullet
+            if (self.shooter_delay < 3):
+                self.shooter_delay += 1
+            else:
+                self.munition_counter -= 1
+                self.player.shoot()
+                self.shooter_delay = 0
 
     def enemy_shoot(self,enemy):
         # handles enemies: every few ticks they will shoot based on their location
@@ -319,11 +345,7 @@ class WiimoteGame(QtWidgets.QWidget):
         self.read_data_from_csv()
         self.predicted_activity = self.predict_activity(x_acc,y_acc,z_acc)
 
-        # updates info line on top and munition line on bottom of the game canvas
-        self.drawInfoLine("Lives: " + str(self.lives)+"/5 Gesture: " + self.predicted_activity + " Highscore: " + str(self.highscore))
-        self.drawMunitionLine(str(self.munition_counter) + "/20")
-        pygame.display.update(self.munition_line.get_rect())
-        pygame.display.update(self.info_line_top.get_rect())
+
 
         if self.predicted_activity == "reload":
             if self.munition_counter != 20:
