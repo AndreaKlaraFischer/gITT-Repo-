@@ -4,6 +4,7 @@ import glob
 import sys
 import pygame
 import wiimote
+import math
 from PyQt5 import QtWidgets, QtCore, QtGui
 import numpy as np
 from scipy import fft
@@ -16,39 +17,48 @@ class Enemy(pygame.sprite.Sprite):
         pygame.sprite.Sprite.__init__(self)
         self.all_sprites = all_sprites
         self.id = id
-        self.speed = speed
+        self.speed = 1
         self.enemy_bullets = enemy_bullets
         self.image = pygame.Surface((50, 50))
         self.image.fill((250,0,0))
         self.rect = self.image.get_rect()
-        self.rect.center = (x,y)
+        self.rect.center = (100,100)
 
-    def update(self):
-        self.rect.x += self.speed
 
     def shoot(self):
         bullet = Bullet(self.rect.centerx, self.rect.bottom, 10)
         self.all_sprites.add(bullet)
         self.enemy_bullets.add(bullet)
 
+    # from https://stackoverflow.com/questions/20044791/how-to-make-an-enemy-follow-the-player-in-pygame
     def move_towards_player(self, Player):
-        dx, dy = self.rect.x - Player.rect.x, self.rect.y - Player.rect.y
-        dist = math.hypot(dx, dy)
-        dx, dy = dx / dist, dy / dist
-        self.rect.x += dx * self.speed
-        self.rect.y += dy * self.speed
+        speed = 1
+        px = Player.rect.x
+        py = Player.rect.y
+        # Movement along x direction
+        if self.rect.x > px:
+            self.rect.x -= speed
+        elif self.rect.x < px:
+            self.rect.x += speed
+        # Movement along y direction
+        if self.rect.y < py:
+            self.rect.y += speed
+        elif self.rect.y > py:
+            self.rect.y -= speed
 
 # from http://kidscancode.org/blog/2016/08/pygame_shmup_part_1/
 class Player(pygame.sprite.Sprite):
     def __init__(self, all_sprites, player_bullets):
         pygame.sprite.Sprite.__init__(self)
+        self.WIDTH = pygame.display.get_surface().get_width()
+        self.HEIGHT = pygame.display.get_surface().get_height()
         self.all_sprites = all_sprites
         self.player_bullets = player_bullets
         self.image = pygame.Surface((50, 40))
         self.image.fill((0,250,0))
         self.rect = self.image.get_rect()
-        self.rect.centerx = 500 / 2
-        self.rect.bottom = 500 - 100
+        self.rect.centerx = self.WIDTH / 2
+        self.rect.bottom = self.HEIGHT - 100
         self.speedx = 0
 
     def update(self):
@@ -61,9 +71,9 @@ class Player(pygame.sprite.Sprite):
             self.speedx = 8
         self.rect.x += self.speedx
         # prevents the player to get outside of the screen
-        if self.rect.right > 500:
+        if self.rect.right > self.WIDTH:
             # todo: set to pause mode
-            self.rect.right = 500
+            self.rect.right = self.WIDTH
         if self.rect.left < 0:
             # todo: set to pause mode
             self.rect.left = 0
@@ -112,7 +122,9 @@ class WiimoteGame(QtWidgets.QWidget):
         self.player_bullets = pygame.sprite.Group()
         self.enemy_bullets = pygame.sprite.Group()
 
-        self.screen = pygame.display.set_mode((500,500))
+        self.screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
+        self.WIDTH = pygame.display.get_surface().get_width()
+        self.HEIGHT = pygame.display.get_surface().get_height()
         pygame.display.set_caption('ITT Final Project')
 
         self.drawInfoLine("Waiting for gesture ... ")
@@ -121,13 +133,10 @@ class WiimoteGame(QtWidgets.QWidget):
 
         # adds an enemy to the canvas. A sprite group is able to hold multiple sprites, i.e. enemies
         self.enemy = Enemy(self.all_sprites, self.enemy_bullets, 1,10,100,1)
-        self.enemy2 = Enemy(self.all_sprites, self.enemy_bullets, 2, 490,200,-1)
 
         self.all_sprites.add(self.enemy)
-        self.all_sprites.add(self.enemy2)
 
         self.enemies.add(self.enemy)
-        self.enemies.add(self.enemy2)
 
         self.player = Player(self.all_sprites, self.player_bullets)
         self.players.add(self.player)
@@ -147,7 +156,7 @@ class WiimoteGame(QtWidgets.QWidget):
             sys.exit()
 
     def drawInfoLine(self,text):
-        self.info_line_top = pygame.Surface((500, 50))
+        self.info_line_top = pygame.Surface((self.WIDTH, 50))
         self.info_line_top = self.info_line_top.convert()
         self.info_line_top.fill((250, 250, 250))
         font = pygame.font.Font(None, 36)
@@ -161,13 +170,13 @@ class WiimoteGame(QtWidgets.QWidget):
 
 
     def drawGameCanvas(self):
-        self.game_canvas = pygame.Surface((500, 500))
+        self.game_canvas = pygame.Surface((self.WIDTH, self.HEIGHT))
         # self.game_canvas = self.game_canvas.convert()
         self.screen.blit(self.game_canvas, (0, 50))
 
     def drawMunitionLine(self,text):
         # todo: replace numerical display later with munition forms, e.g. small rects
-        self.munition_line = pygame.Surface((500, 50))
+        self.munition_line = pygame.Surface((self.WIDTH, 50))
         # self.munition_line = self.munition_line.convert()
         self.munition_line.fill((250,250,250))
         font = pygame.font.Font(None, 36)
@@ -175,7 +184,7 @@ class WiimoteGame(QtWidgets.QWidget):
         munition_text_rect = self.munition_text.get_rect()
         munition_text_rect.centerx = self.munition_line.get_rect().centerx
         self.munition_line.blit(self.munition_text, munition_text_rect)
-        self.screen.blit(self.munition_line, (0, 450))
+        self.screen.blit(self.munition_line, (0, self.HEIGHT-50))
 
 
 
@@ -235,7 +244,6 @@ class WiimoteGame(QtWidgets.QWidget):
         #print("B: " + str(self.wm_tracker.accelerometer[1]))
         self.highscore += 1
         self.enemy_shoot(self.enemy)
-        self.enemy_shoot(self.enemy2)
 
         if self.input_device == "wiimote":
             # handles drawing mode and disables shooting while drawing
@@ -257,6 +265,8 @@ class WiimoteGame(QtWidgets.QWidget):
 
         # updates the enemies and moves them
         self.all_sprites.update()
+
+        self.enemy.move_towards_player(self.player)
 
 
         # checks for collisions between an enemy and the player's bullets and
@@ -299,6 +309,10 @@ class WiimoteGame(QtWidgets.QWidget):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    exit()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     self.player.shoot()
