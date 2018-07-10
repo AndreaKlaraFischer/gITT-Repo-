@@ -11,25 +11,14 @@ from scipy import fft
 from sklearn import svm
 from os import path
 
+# defines the directory where all images are located
 img_dir = path.join(path.dirname(__file__), 'img')
-
-# This class handles sprite sheets
-# This was taken from www.scriptefun.com/transcript-2-using
-# sprite-sheets-and-drawing-the-background
-# I've added some code to fail if the file wasn't found..
-# Note: When calling images_at the rect is the format:
-# (x, y, x + offset, y + offset)
-
-
-
-
-
-
 
 
 #assets:
 # crosshairs: https://opengameart.org/content/20-crosshairs-for-re
 # explosion: http://1.bp.blogspot.com/-h4gHvGnPfH0/UmFUg1riZlI/AAAAAAAAAFU/FGgUImTIGbU/s640/explosjon3.png
+# circle (temporary): https://www.kisspng.com/png-circle-rainbow-free-content-clip-art-rainbow-borde-175522/download-png.html
 # from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
 class Enemy(pygame.sprite.Sprite):
     def __init__(self,  id,x,y,speed):
@@ -37,25 +26,28 @@ class Enemy(pygame.sprite.Sprite):
         pygame.sprite.Sprite.__init__(self)
         self.id = id
         self.speed = speed
-        self.crosshair_img = pygame.image.load(path.join(img_dir, "dummy_circle.png")).convert()
 
-
-        self.image = self.crosshair_img
-        self.image = pygame.transform.scale(self.crosshair_img, (50, 50))
+        # sets the image of the enemy objects
+        self.circle_img = pygame.image.load(path.join(img_dir, "dummy_circle.png")).convert()
+        self.image = self.circle_img
+        # scales down image
+        self.image = pygame.transform.scale(self.circle_img, (50, 50))
+        # avoids a black background
         self.image.set_colorkey((0, 0, 0))
 
-        self.collisionY = False
-        self.collisionX = False
-        self.radius = 25
+        # specifies position of enemy
         self.rect = self.image.get_rect()
         self.rect.x = x
         self.rect.y = y
+
+        # init
         self.enemy_delay = 50
         self.lose_live = False
-        self.iterator =0
-
         self.explosion_sprite = []
+        self.collisionY = False
+        self.collisionX = False
 
+        # creates a list of all explosion images
         for x in range(1, 17):
             explode_img_1 = pygame.image.load(path.join(img_dir, "explosion_" + str(x) + ".png")).convert()
             self.explosion_sprite.append(explode_img_1)
@@ -64,17 +56,14 @@ class Enemy(pygame.sprite.Sprite):
     def explode(self, iterator):
         # hinder enemy to move any further if he was shooted
         self.speed = 0
-
-        #if self.iterator < len(self.explosion_sprite):
+        # sets explosion image to image in list index defined by iterator that is passed in update method
         self.image = pygame.transform.scale(self.explosion_sprite[iterator], (90, 90))
         self.image.set_colorkey((0, 0, 0))
-        self.iterator += 1
-        # else:
-        # self.iterator = 0
 
 
     def get_explosion_duration(self):
         return len(self.explosion_sprite)
+
     # from https://stackoverflow.com/questions/20044791/how-to-make-an-enemy-follow-the-player-in-pygame
     def move_towards_player(self, Player):
         speed = self.speed
@@ -96,7 +85,6 @@ class Enemy(pygame.sprite.Sprite):
             self.rect.centery += speed
             self.collisionY = False
             self.enemy_delay = 50
-
         elif self.rect.centery > py:
             self.rect.centery -= speed
             self.collisionY = False
@@ -104,32 +92,29 @@ class Enemy(pygame.sprite.Sprite):
         else:
             self.collisionY = True
         if self.collisionY == True & self.collisionX == True:
+            # adds a delay after that the player will lose a live
             if self.enemy_delay <= 0:
                 self.lose_live = True
-                print(len(self.explosion_sprite))
-
             else:
                 self.enemy_delay -= 1
 
-
+    # returns whether an enemy is overlapped with the player
     def get_collision(self):
          return self.lose_live
 
-
+    # resets enemy to start position
     def reset(self):
         self.rect.x = 10
         self.rect.y = 10
         self.lose_live = False
-        self.enemy_delay = 30
+        self.enemy_delay = 50
 
 # from http://kidscancode.org/blog/2016/08/pygame_shmup_part_1/
 class Player(pygame.sprite.Sprite):
-    def __init__(self, all_sprites):
+    def __init__(self):
         pygame.sprite.Sprite.__init__(self)
-
         self.WIDTH = pygame.display.get_surface().get_width()
         self.HEIGHT = pygame.display.get_surface().get_height()
-        self.all_sprites = all_sprites
         self.image = pygame.Surface((30, 30))
         self.image.fill((0,250,0))
         self.rect = self.image.get_rect()
@@ -137,8 +122,8 @@ class Player(pygame.sprite.Sprite):
         self.rect.bottom = self.HEIGHT - 200
         self.speedx = 0
 
-
-
+    # moves player based on keyboard input
+    # todo: change player movement by headtracking coordinates
     def update(self):
         self.speedx = 0
         self.speedy =0
@@ -162,39 +147,30 @@ class Player(pygame.sprite.Sprite):
             # todo: set to pause mode
             self.rect.left = 0
 
-
+    # resets player to start position
     def reset(self):
         self.rect.centerx = self.WIDTH / 2
         self.rect.bottom = self.HEIGHT - 200
 
 
-
-
 class Crosshairs(pygame.sprite.Sprite):
-    def __init__(self, all_sprites):
+    def __init__(self):
         pygame.sprite.Sprite.__init__(self)
+        # set crosshair image
         self.crosshair_img = pygame.image.load(path.join(img_dir, "circle-5.png")).convert()
-
-
-
-
-
         self.WIDTH = pygame.display.get_surface().get_width()
         self.HEIGHT = pygame.display.get_surface().get_height()
-        self.all_sprites = all_sprites
         self.image = self.crosshair_img
         self.image = pygame.transform.scale(self.crosshair_img, (30, 30))
         self.image.set_colorkey((0,0,0))
         self.radius = 10
         self.rect = self.image.get_rect()
 
-
+    # display crosshairs on mouse position
     def update(self):
         mousex, mousey = pygame.mouse.get_pos()
         self.rect.centerx = mousex
         self.rect.centery = mousey
-
-
 
 
 class WiimoteGame(QtWidgets.QWidget):
@@ -206,62 +182,27 @@ class WiimoteGame(QtWidgets.QWidget):
         self.input_device = None
         self.connect_wiimotes()
 
-
-    # Prepare the audio files
     def init_pygame(self):
         pygame.init()
-
-
-
-        self.all_sprites = pygame.sprite.Group()
-        self.enemies = pygame.sprite.Group()
-        self.players = pygame.sprite.Group()
-        # specific screensize for development, i.e. for displaying the console etc.
-        #self.screen = pygame.display.set_mode((500, 500))
-        # production mode with fullscreen
-        self.screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
-        self.WIDTH = pygame.display.get_surface().get_width()
-        self.HEIGHT = pygame.display.get_surface().get_height()
-        pygame.display.set_caption('ITT Final Project')
-
-        self.drawInfoLine("Waiting for gesture ... ")
-        self.drawGameCanvas()
-        self.drawMunitionLine("20/20")
-
-        # adds an enemy to the canvas. A sprite group is able to hold multiple sprites, i.e. enemies
-        enemy = Enemy(1, 10,10,1)
-        self.enemies.add(enemy)
-        #self.all_sprites.add(enemy)
-
-        enemy = Enemy( 1, self.WIDTH - 50, 10,1)
-        self.enemies.add(enemy)
-        #self.all_sprites.add(enemy)
-
-        self.crosshairs = Crosshairs(self.all_sprites)
-
-        self.all_sprites.add(self.crosshairs)
-
-
-        self.player = Player(self.all_sprites)
-        self.players.add(self.player)
-
-        self.all_sprites.add(self.player)
-
-        self.enemies.draw(self.screen)
-        self.all_sprites.draw(self.screen)
-
-
+        self.init_canvas()
+        self.init_sprites()
         # updates complete pygame display
         pygame.display.flip()
-        try:
-            # Init Sounds here (the soundfiles need to be in folder "assets"
-            #pygame.mixer.music.load(os.path.join("assets", "instrumental.wav"))
-            print("test")
-        except pygame.error:
-            print("Missing audio file!")
-            sys.exit()
+        self.init_sounds()
 
-    def drawInfoLine(self,text):
+    def init_canvas(self):
+       # specific screensize for development, i.e. for displaying the console etc.:
+       # self.screen = pygame.display.set_mode((500, 500))
+       # production mode with fullscreen:
+       self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+       self.WIDTH = pygame.display.get_surface().get_width()
+       self.HEIGHT = pygame.display.get_surface().get_height()
+       pygame.display.set_caption('ITT Final Project')
+       self.drawInfoLine("Waiting for gesture ... ")
+       self.drawGameCanvas()
+       self.drawMunitionLine("20/20")
+
+    def drawInfoLine(self, text):
         self.info_line_top = pygame.Surface((self.WIDTH, 50))
         self.info_line_top = self.info_line_top.convert()
         self.info_line_top.fill((250, 250, 250))
@@ -272,26 +213,47 @@ class WiimoteGame(QtWidgets.QWidget):
         self.info_line_top.blit(self.text, textpos)
         self.screen.blit(self.info_line_top, (0, 0))
 
-
-
-
     def drawGameCanvas(self):
         self.game_canvas = pygame.Surface((self.WIDTH, self.HEIGHT))
-        # self.game_canvas = self.game_canvas.convert()
         self.screen.blit(self.game_canvas, (0, 50))
 
-    def drawMunitionLine(self,text):
+    def drawMunitionLine(self, text):
         # todo: replace numerical display later with munition forms, e.g. small rects
         self.munition_line = pygame.Surface((self.WIDTH, 50))
-        # self.munition_line = self.munition_line.convert()
-        self.munition_line.fill((250,250,250))
+        self.munition_line.fill((250, 250, 250))
         font = pygame.font.Font(None, 36)
         self.munition_text = font.render(text, 1, (10, 10, 10))
         munition_text_rect = self.munition_text.get_rect()
         munition_text_rect.centerx = self.munition_line.get_rect().centerx
         self.munition_line.blit(self.munition_text, munition_text_rect)
-        self.screen.blit(self.munition_line, (0, self.HEIGHT-50))
+        self.screen.blit(self.munition_line, (0, self.HEIGHT - 50))
 
+    def init_sprites(self):
+        # adds all sprites, i.e. game elements to the screen
+        self.all_sprites = pygame.sprite.Group()
+        self.enemies = pygame.sprite.Group()
+        self.players = pygame.sprite.Group()
+        enemy = Enemy(1, 10, 10, 1)
+        self.enemies.add(enemy)
+        enemy = Enemy(1, self.WIDTH - 50, 10, 1)
+        self.enemies.add(enemy)
+        self.crosshairs = Crosshairs()
+        self.all_sprites.add(self.crosshairs)
+        self.player = Player()
+        self.players.add(self.player)
+        self.all_sprites.add(self.player)
+        # draws all game elements
+        self.enemies.draw(self.screen)
+        self.all_sprites.draw(self.screen)
+
+    def init_sounds(self):
+        try:
+            # Init Sounds here (the soundfiles need to be in folder "assets"
+            # pygame.mixer.music.load(os.path.join("assets", "instrumental.wav"))
+            print("test")
+        except pygame.error:
+            print("Missing audio file!")
+            sys.exit()
 
 
     # Start the pairing process, like in wiimote_demo.py
@@ -305,7 +267,6 @@ class WiimoteGame(QtWidgets.QWidget):
             self.wm_pointer = wiimote.connect(pointer, name_pointer)
             self.wm = self.wm_pointer
             self.input_device = "wiimote"
-
             # As soon as the Wiimote is connected, start the loop
             self.start_loop()
         else:
@@ -318,9 +279,9 @@ class WiimoteGame(QtWidgets.QWidget):
         sound.play()
 
 
-
     # Starting the game loop
     def start_loop(self):
+        # todo: check later if all of these are still used
         self.game_mode = "shoot"
         self.prediction_values = [[], [], []]
         self.last_prediction = "Waiting for data..."
@@ -339,7 +300,6 @@ class WiimoteGame(QtWidgets.QWidget):
         self.c = svm.SVC()
         self.shoot_enemy_anim_iterator = 0
         self.minlen = 100000  # Just a large value to begin with
-        self.qp = QtGui.QPainter()
         self.loop_timer.setSingleShot(False)
         self.loop_timer.timeout.connect(self.loop_iteration)
         self.loop_timer.start(60)
@@ -363,59 +323,58 @@ class WiimoteGame(QtWidgets.QWidget):
                 else:
                     print("shooting not possible, reloading necessary")
 
+    # if the player shoots an enemy
     def player_shoot(self,x,y):
+        # check for each enemy, if the mouse or wiimote, i.e. x and y are within an enemy
         for enemy in self.enemies:
             dist = math.hypot(x - enemy.rect.centerx, y - enemy.rect.centery)
-            # smaller than enemy radius
+            # needs to be smaller than enemy radius
             if dist < 25:
                 if self.check_munition_available() == True:
-                    #self.enemies.remove(enemy)
                     self.munition_counter -= 1
                     self.highscore += 100
                     self.shot_enemy = True
                     self.shooted_enemy = enemy
-
                 else:
                     print("no munition. press RETURN on keyboard or shake wiimote")
                 # todo: or instead of removing make enemy smaller before it completely disappears?
 
 
-
+    # checks if the player is overlapped by an enemy
     def check_enemy_behind(self):
         for enemy in self.enemies:
+            # is true as soon as the enemy waiting delay is over
             check_for_overlapping = enemy.get_collision()
             if (check_for_overlapping == True):
                 enemy.reset()
                 self.player.reset()
                 if (self.lives > 0):
                     self.lives -= 1
-
-
                 else:
                     print("show highscore screen")
                     # todo: implement highscore screen stuff and csv saving
 
+   # counts minutes and adds a new enemy after each minute
     def check_level(self):
         if self.level_seconds_counter > 600:
             self.level_seconds_counter = 0
             self.level += 1
             enemy = Enemy(1, self.WIDTH/2, 0, 1)
             self.enemies.add(enemy)
-            #self.all_sprites.add(enemy)
         else:
             self.level_seconds_counter +=1
 
     # One iteration of the loop
     def loop_iteration(self):
         self.highscore += 1
-
         self.check_level()
-
         self.switch_draw_shoot_mode()
         # todo: add check for shields
-        self.enemies.update()
+
         # updates the enemies and moves them
+        self.enemies.update()
         self.all_sprites.update()
+
         # enemy should follow the player
         for enemy in self.enemies:
             enemy.move_towards_player(self.player)
@@ -423,12 +382,14 @@ class WiimoteGame(QtWidgets.QWidget):
         # check for overlapping with enemy
         self.check_enemy_behind()
 
+        # draws explosion, if the player has shot an enemy
         self.draw_explosion()
 
         # update the screen and draw all sprites on new positions
         self.screen.fill((100, 100, 100))
         self.enemies.draw(self.screen)
         self.all_sprites.draw(self.screen)
+
         # recognize gesture
         if self.input_device == "wiimote":
             self.recognize_activity(self.wm_pointer.accelerometer)
@@ -443,9 +404,10 @@ class WiimoteGame(QtWidgets.QWidget):
         pygame.display.flip()
         self.init_pygame_events()
 
-
+    # draws an explosion animation, if the player has just shot an enemy
     def draw_explosion(self):
         if self.shot_enemy == True:
+            # increase the number of the enemy sprite image with each tick and draw image
             if self.shoot_enemy_anim_iterator < self.shooted_enemy.get_explosion_duration():
                 self.shooted_enemy.explode(self.shoot_enemy_anim_iterator)
                 self.shoot_enemy_anim_iterator += 1
@@ -472,7 +434,6 @@ class WiimoteGame(QtWidgets.QWidget):
                 x = pygame.mouse.get_pos()[0]
                 y = pygame.mouse.get_pos()[1]
                 self.player_shoot(x,y)
-
 
 
     def check_munition_available(self):
