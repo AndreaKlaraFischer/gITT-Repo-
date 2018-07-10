@@ -12,62 +12,51 @@ from sklearn import svm
 
 # from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self,all_sprites,  id):
+    def __init__(self,  id,x,y,speed):
         # todo: create global constants for width and height and all the other hardcoded numbers
         pygame.sprite.Sprite.__init__(self)
-        self.all_sprites = all_sprites
         self.id = id
-        self.speed = 1
+        self.speed = speed
         self.image = pygame.Surface((50, 50), pygame.SRCALPHA, 32)
         self.image = self.image.convert_alpha()
-
         self.collisionY = False
         self.collisionX = False
-        #self.image.fill((250,0,0))
-        #self.image.set_colorkey((255,0,255))
-        #self.rect = self.image.get_rect()
-        #self.rect.center = (100,100)
-
         self.radius = 25
         self.rect = pygame.draw.circle(self.image, (250,250,0), (25,25), self.radius)
-
-        self.rect.x = 10
-        self.rect.y = 10
-
-        self.enemy_delay = 100
+        self.rect.x = x
+        self.rect.y = y
+        self.enemy_delay = 50
         self.lose_live = False
 
 
     # from https://stackoverflow.com/questions/20044791/how-to-make-an-enemy-follow-the-player-in-pygame
     def move_towards_player(self, Player):
-        speed = 1
+        speed = self.speed
         px = Player.rect.centerx
         py = Player.rect.centery
         # Movement along x direction
         if self.rect.centerx > px:
             self.rect.centerx -= speed
             self.collisionX = False
-            self.enemy_delay = 100
-
+            self.enemy_delay = 50
         elif self.rect.centerx < px:
             self.rect.centerx += speed
             self.collisionX = False
-            self.enemy_delay = 100
+            self.enemy_delay = 50
         else:
             self.collisionX = True
         # Movement along y direction
         if self.rect.centery < py:
             self.rect.centery += speed
             self.collisionY = False
-            self.enemy_delay = 100
+            self.enemy_delay = 50
 
         elif self.rect.centery > py:
             self.rect.centery -= speed
             self.collisionY = False
-            self.enemy_delay = 100
+            self.enemy_delay = 50
         else:
             self.collisionY = True
-
         if self.collisionY == True & self.collisionX == True:
             if self.enemy_delay <= 0:
                 self.lose_live = True
@@ -83,7 +72,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.x = 10
         self.rect.y = 10
         self.lose_live = False
-        self.enemy_delay = 100
+        self.enemy_delay = 30
 
 # from http://kidscancode.org/blog/2016/08/pygame_shmup_part_1/
 class Player(pygame.sprite.Sprite):
@@ -168,9 +157,9 @@ class WiimoteGame(QtWidgets.QWidget):
         self.enemies = pygame.sprite.Group()
         self.players = pygame.sprite.Group()
         # specific screensize for development, i.e. for displaying the console etc.
-        self.screen = pygame.display.set_mode((500, 500))
+        #self.screen = pygame.display.set_mode((500, 500))
         # production mode with fullscreen
-        #self.screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
+        self.screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
         self.WIDTH = pygame.display.get_surface().get_width()
         self.HEIGHT = pygame.display.get_surface().get_height()
         pygame.display.set_caption('ITT Final Project')
@@ -180,19 +169,25 @@ class WiimoteGame(QtWidgets.QWidget):
         self.drawMunitionLine("20/20")
 
         # adds an enemy to the canvas. A sprite group is able to hold multiple sprites, i.e. enemies
-        self.enemy = Enemy(self.all_sprites,  1)
+        enemy = Enemy(1, 10,10,1)
+        self.enemies.add(enemy)
+        #self.all_sprites.add(enemy)
+
+        enemy = Enemy( 1, self.WIDTH - 50, 10,1)
+        self.enemies.add(enemy)
+        #self.all_sprites.add(enemy)
 
         self.crosshairs = Crosshairs(self.all_sprites)
 
-        self.all_sprites.add(self.enemy)
         self.all_sprites.add(self.crosshairs)
 
-        self.enemies.add(self.enemy)
 
         self.player = Player(self.all_sprites)
         self.players.add(self.player)
 
         self.all_sprites.add(self.player)
+
+        self.enemies.draw(self.screen)
         self.all_sprites.draw(self.screen)
 
 
@@ -274,6 +269,8 @@ class WiimoteGame(QtWidgets.QWidget):
         self.munition_counter = 20
         self.lives = 5
         self.highscore = 0
+        self.level = 1
+        self.level_seconds_counter = 0
         self.hit_enemy = None
         self.new_training_values = [[], [], []]
         self.prediction_values = [[], [], []]
@@ -282,7 +279,7 @@ class WiimoteGame(QtWidgets.QWidget):
         self.qp = QtGui.QPainter()
         self.loop_timer.setSingleShot(False)
         self.loop_timer.timeout.connect(self.loop_iteration)
-        self.loop_timer.start(35)
+        self.loop_timer.start(60)
 
 
     def switch_draw_shoot_mode(self):
@@ -304,43 +301,63 @@ class WiimoteGame(QtWidgets.QWidget):
                     print("shooting not possible, reloading necessary")
 
     def player_shoot(self,x,y):
-        dist = math.hypot(x - self.enemy.rect.centerx, y - self.enemy.rect.centery)
-        # smaller than enemy radius
-        if dist < 25:
-            if self.check_munition_available() == True:
-                self.all_sprites.remove(self.enemy)
-                self.munition_counter -= 1
-                self.highscore += 100
-            else:
-                print("no munition. press RETURN on keyboard or shake wiimote")
-            # todo: or instead of removing make enemy smaller before it completely disappears?
+        for enemy in self.enemies:
+            dist = math.hypot(x - enemy.rect.centerx, y - enemy.rect.centery)
+            # smaller than enemy radius
+            if dist < 25:
+                if self.check_munition_available() == True:
+                    self.enemies.remove(enemy)
+                    self.munition_counter -= 1
+                    self.highscore += 100
+                else:
+                    print("no munition. press RETURN on keyboard or shake wiimote")
+                # todo: or instead of removing make enemy smaller before it completely disappears?
+
+
 
     def check_enemy_behind(self):
-        check_for_overlapping = self.enemy.get_collision()
-        if (check_for_overlapping == True):
-            if (self.lives > 0):
-                self.lives -= 1
-                self.enemy.reset()
+        for enemy in self.enemies:
+            check_for_overlapping = enemy.get_collision()
+            if (check_for_overlapping == True):
+                enemy.reset()
                 self.player.reset()
-            else:
-                print("show highscore screen")
-                # todo: implement highscore screen stuff and csv saving
+                if (self.lives > 0):
+                    self.lives -= 1
+
+
+                else:
+                    print("show highscore screen")
+                    # todo: implement highscore screen stuff and csv saving
+
+    def check_level(self):
+        if self.level_seconds_counter > 600:
+            self.level_seconds_counter = 0
+            self.level += 1
+            enemy = Enemy(1, self.WIDTH/2, 0, 1)
+            self.enemies.add(enemy)
+            #self.all_sprites.add(enemy)
+        else:
+            self.level_seconds_counter +=1
 
     # One iteration of the loop
     def loop_iteration(self):
         self.highscore += 1
 
+        self.check_level()
+
         self.switch_draw_shoot_mode()
         # todo: add check for shields
-
+        self.enemies.update()
         # updates the enemies and moves them
         self.all_sprites.update()
         # enemy should follow the player
-        self.enemy.move_towards_player(self.player)
+        for enemy in self.enemies:
+            enemy.move_towards_player(self.player)
         # check for overlapping with enemy
         self.check_enemy_behind()
         # update the screen and draw all sprites on new positions
         self.screen.fill((100, 100, 100))
+        self.enemies.draw(self.screen)
         self.all_sprites.draw(self.screen)
         # recognize gesture
         if self.input_device == "wiimote":
