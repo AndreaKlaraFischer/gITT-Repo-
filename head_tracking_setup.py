@@ -32,10 +32,11 @@ class HeadTrackingSetup(QWidget):
 
         self.WIIMOTE_IR_CAM_WIDTH = 1024
         self.WIIMOTE_IR_CAM_HEIGHT = 768
+        self.WIIMOTE_IR_CAM_CENTER = (self.WIIMOTE_IR_CAM_WIDTH/2, self.WIIMOTE_IR_CAM_HEIGHT/2)
 
         self.left = (0,0)
         self.right = (0,0)
-        self.WIIMOTE_IR_CAM_CENTER = (self.WIIMOTE_IR_CAM_WIDTH/2, self.WIIMOTE_IR_CAM_HEIGHT/2)
+        self.center = (0,0)
 
         self.connect_wiimote()
         self.initUI()
@@ -46,27 +47,31 @@ class HeadTrackingSetup(QWidget):
         self.show()
 
     def connect_wiimote(self):
-        if len(sys.argv) == 1:
-            print(wiimote.find())
-            addr, name = wiimote.find()[0]
-        elif len(sys.argv) == 2:
-            addr = sys.argv[1]
-            name = None
-
+        addr = "B8:AE:6E:55:B5:0F"
+        name = None
         print(("Connecting to %s (%s)" % (name, addr)))
         wm = wiimote.connect(addr, name)
-        wm.ir.register_callback(self.print_ir)
+        wm.ir.register_callback(self.get_ir_data)
 
-    def print_ir(self, ir_data):
+    def get_ir_data(self, ir_data):
         if len(ir_data) == 2:
-            self.left = (ir_data[0]["x"], ir_data[0]["y"])
-            self.right = (ir_data[1]["x"], ir_data[1]["y"])
-            self.invert_points()
+            left = (ir_data[0]["x"], ir_data[0]["y"])
+            right = (ir_data[1]["x"], ir_data[1]["y"])
+            self.invert_points(left, right)
+            self.calculate_head_center()
             self.update()
 
-    def invert_points(self):
-        self.left = (self.WIIMOTE_IR_CAM_WIDTH - self.left[0], self.WIIMOTE_IR_CAM_HEIGHT - self.left[1])
-        self.right = (self.WIIMOTE_IR_CAM_WIDTH - self.right[0], self.WIIMOTE_IR_CAM_HEIGHT - self.right[1])
+    def invert_points(self, left, right):
+        self.left = (self.WIIMOTE_IR_CAM_WIDTH - left[0], self.WIIMOTE_IR_CAM_HEIGHT - left[1])
+        self.right = (self.WIIMOTE_IR_CAM_WIDTH - right[0], self.WIIMOTE_IR_CAM_HEIGHT - right[1])
+
+    def calculate_head_center(self):
+        self.center = ((self.left[0] + self.right[0]) / 2,(self.left[1] + self.right[1]) / 2)
+
+    def to_screen_coordinates(self, screen_width, screen_height):
+        x_on_screen = (self.center[0] / self.WIIMOTE_IR_CAM_WIDTH) * screen_width
+        y_on_screen = (self.center[1] / self.WIIMOTE_IR_CAM_HEIGHT) * screen_height
+        return x_on_screen, y_on_screen
 
     def paintEvent(self, e):
         qp = QPainter()
@@ -83,9 +88,8 @@ class HeadTrackingSetup(QWidget):
         qp.drawRect(b)
 
         # Middle point between two LEDs
-        middle = ((self.left[0] + self.right[0])/2,(self.left[1] + self.right[1])/2)
         qp.setBrush(QColor(0, 0, 255))
-        qp.drawRect(middle[0], middle[1], 20, 20)
+        qp.drawRect(self.center[0], self.center[1], 20, 20)
 
         qp.setBrush(QColor(0, 255, 0))
         qp.drawRect(self.WIIMOTE_IR_CAM_CENTER[0], self.WIIMOTE_IR_CAM_CENTER[1], 20, 20)

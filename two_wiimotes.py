@@ -20,6 +20,7 @@ img_dir = path.join(path.dirname(__file__), 'img')
 # explosion: http://1.bp.blogspot.com/-h4gHvGnPfH0/UmFUg1riZlI/AAAAAAAAAFU/FGgUImTIGbU/s640/explosjon3.png
 # circle (temporary): https://www.kisspng.com/png-circle-rainbow-free-content-clip-art-rainbow-borde-175522/download-png.html
 # from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
+
 class Enemy(pygame.sprite.Sprite):
     def __init__(self,  id,x,y,speed):
         # todo: create global constants for width and height and all the other hardcoded numbers
@@ -115,19 +116,27 @@ class Player(pygame.sprite.Sprite):
         pygame.sprite.Sprite.__init__(self)
         self.WIDTH = pygame.display.get_surface().get_width()
         self.HEIGHT = pygame.display.get_surface().get_height()
-        self.image = pygame.Surface((30, 30))
-        self.image.fill((0,250,0))
+        self.image = pygame.Surface((100, 100))
+        self.image.fill((0, 255, 0))
         self.rect = self.image.get_rect()
         self.rect.centerx = self.WIDTH / 2
         self.rect.bottom = self.HEIGHT - 200
         self.speedx = 0
+        self.x = 0
+        self.y = 0
+
+    def set_player_coordinates(self, x, y):
+        print("TEST")
+        self.x = x
+        self.y = y
 
     # moves player based on keyboard input
     # todo: change player movement by headtracking coordinates
     def update(self):
         self.speedx = 0
-        self.speedy =0
+        self.speedy = 0
         # at the moment the movement of the player is handled via left and right arrows
+        """
         keystate = pygame.key.get_pressed()
         if keystate[pygame.K_LEFT]:
             self.speedx = -8
@@ -139,6 +148,12 @@ class Player(pygame.sprite.Sprite):
             self.speedy = 8
         self.rect.x += self.speedx
         self.rect.y += self.speedy
+        """
+        self.rect.x = self.x
+        self.rect.y = self.y
+        print(self.rect.x)
+        print(self.rect.y)
+
         # prevents the player to get outside of the screen
         if self.rect.right > self.WIDTH:
             # todo: set to pause mode
@@ -177,6 +192,11 @@ class WiimoteGame(QtWidgets.QWidget):
 
     def __init__(self):
         super().__init__()
+
+        self.WIIMOTE_IR_CAM_WIDTH = 1024
+        self.WIIMOTE_IR_CAM_HEIGHT = 768
+        self.WIIMOTE_IR_CAM_CENTER = (self.WIIMOTE_IR_CAM_WIDTH/2, self.WIIMOTE_IR_CAM_HEIGHT/2)
+
         self.loop_timer = QtCore.QTimer()
         self.init_pygame()
         self.input_device = None
@@ -255,9 +275,24 @@ class WiimoteGame(QtWidgets.QWidget):
             print("Missing audio file!")
             sys.exit()
 
-
     # Start the pairing process, like in wiimote_demo.py
     def connect_wiimotes(self):
+        """
+        if len(sys.argv) == 1:
+            tracker = "B8:AE:6E:55:B5:0F"
+            pointer = "00:1e:a9:36:9b:34"
+            name_tracker = None
+            name_pointer = None
+            self.wm_tracker = wiimote.connect(tracker, name_tracker)
+            self.wm_pointer = wiimote.connect(pointer, name_pointer)
+
+            self.wm_tracker.ir.register_callback(self.get_ir_data)
+
+            self.wm = self.wm_pointer
+            self.input_device = "wiimote"
+            # As soon as the Wiimote is connected, start the loop
+            self.start_loop()
+        """
         if len(sys.argv) == 3:
             tracker = sys.argv[1]
             pointer = sys.argv[2]
@@ -265,6 +300,9 @@ class WiimoteGame(QtWidgets.QWidget):
             name_pointer = None
             self.wm_tracker = wiimote.connect(tracker, name_tracker)
             self.wm_pointer = wiimote.connect(pointer, name_pointer)
+
+            self.wm_tracker.ir.register_callback(self.get_ir_data)
+
             self.wm = self.wm_pointer
             self.input_device = "wiimote"
             # As soon as the Wiimote is connected, start the loop
@@ -278,6 +316,34 @@ class WiimoteGame(QtWidgets.QWidget):
         sound = self.vocals[vocal_name]
         sound.play()
 
+    # Get the IR data from the "Tacker" Wiimote
+    def get_ir_data(self, ir_data):
+        if len(ir_data) == 2:
+            left = (ir_data[0]["x"], ir_data[0]["y"])
+            right = (ir_data[1]["x"], ir_data[1]["y"])
+            self.invert_points(left, right)
+
+    # Since we want direct movement (e.g move head up -> move player on screen up), the coordinate points need to be inverted. Otherwise, movements will be in the wrong direction
+    def invert_points(self, left, right):
+        left = (self.WIIMOTE_IR_CAM_WIDTH - left[0], self.WIIMOTE_IR_CAM_HEIGHT - left[1])
+        right = (self.WIIMOTE_IR_CAM_WIDTH - right[0], self.WIIMOTE_IR_CAM_HEIGHT - right[1])
+        self.calculate_head_center(left, right)
+
+    # After getting the coordinates of the two LEDs, we need to calculate the point in the middle of the two coordinates. This is the center of our head.
+    def calculate_head_center(self, left, right):
+        center = ((left[0] + right[0]) / 2, (left[1] + right[1]) / 2)
+        print(center)
+        self.to_screen_coordinates(center)
+
+    # The coordinates of the head center are for the resolution of the Wiimote IR Cam (1024x768). To position the player correctly on the screen, new coordinates need to be calculated, suited for the resolution of the screen.
+    def to_screen_coordinates(self, center):
+        x_on_screen = int((center[0] / self.WIIMOTE_IR_CAM_WIDTH) * self.WIDTH)
+        y_on_screen = int((center[1] / self.WIIMOTE_IR_CAM_HEIGHT) * self.HEIGHT)
+
+        print("X on screen: ", x_on_screen)
+        print("Y on screen: ", y_on_screen)
+        # Pass the coordinates to the player.
+        self.player.set_player_coordinates(x_on_screen, y_on_screen)
 
     # Starting the game loop
     def start_loop(self):
