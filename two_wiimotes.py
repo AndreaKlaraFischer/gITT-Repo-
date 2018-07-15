@@ -21,6 +21,15 @@ img_dir = path.join(path.dirname(__file__), 'img')
 # circle (temporary): https://www.kisspng.com/png-circle-rainbow-free-content-clip-art-rainbow-borde-175522/download-png.html
 # from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
 
+class Constants:
+    WIIMOTE_IR_CAM_WIDTH = 1024
+    WIIMOTE_IR_CAM_HEIGHT = 768
+    WIIMOTE_IR_CAM_CENTER = (WIIMOTE_IR_CAM_WIDTH/2, WIIMOTE_IR_CAM_HEIGHT/2)
+
+    #WIDTH = pygame.display.get_surface().get_width()
+    #HEIGHT = pygame.display.get_surface().get_height()
+
+
 class Enemy(pygame.sprite.Sprite):
     def __init__(self,  id,x,y,speed):
         # todo: create global constants for width and height and all the other hardcoded numbers
@@ -126,7 +135,6 @@ class Player(pygame.sprite.Sprite):
         self.y = 0
 
     def set_player_coordinates(self, x, y):
-        print("TEST")
         self.x = x
         self.y = y
 
@@ -151,8 +159,6 @@ class Player(pygame.sprite.Sprite):
         """
         self.rect.x = self.x
         self.rect.y = self.y
-        print(self.rect.x)
-        print(self.rect.y)
 
         # prevents the player to get outside of the screen
         if self.rect.right > self.WIDTH:
@@ -180,6 +186,8 @@ class Crosshairs(pygame.sprite.Sprite):
         self.image.set_colorkey((0,0,0))
         self.radius = 10
         self.rect = self.image.get_rect()
+
+        pygame.mouse.set_cursor((8,8),(0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0))
 
     # display crosshairs on mouse position
     def update(self):
@@ -270,38 +278,48 @@ class WiimoteGame(QtWidgets.QWidget):
         try:
             # Init Sounds here (the soundfiles need to be in folder "assets"
             # pygame.mixer.music.load(os.path.join("assets", "instrumental.wav"))
-            print("test")
+            print()
         except pygame.error:
             print("Missing audio file!")
             sys.exit()
 
     # Start the pairing process, like in wiimote_demo.py
     def connect_wiimotes(self):
-        """
-        if len(sys.argv) == 1:
-            tracker = "B8:AE:6E:55:B5:0F"
-            pointer = "00:1e:a9:36:9b:34"
-            name_tracker = None
-            name_pointer = None
-            self.wm_tracker = wiimote.connect(tracker, name_tracker)
-            self.wm_pointer = wiimote.connect(pointer, name_pointer)
 
-            self.wm_tracker.ir.register_callback(self.get_ir_data)
+        name_tracker = None
+        name_pointer = None
+
+        if len(sys.argv) == 1:
+            pointer = "B8:AE:6E:55:B5:0F"
+            tracker = "00:1e:a9:36:9b:34"
+            self.wm_pointer = wiimote.connect(pointer, name_pointer)
+            self.wm_tracker = wiimote.connect(tracker, name_tracker)
+
+            self.wm_tracker.ir.set_mode(self.wm_tracker.ir.MODE_FULL)
+            self.wm_tracker.ir.set_sensitivity(5)
+
+            self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
+            self.wm_tracker.ir.register_callback(self.get_ir_data_of_tracker)
+
+            self.wm_pointer.leds = [1, 0, 0, 0]
+            self.wm_tracker.leds = [0, 1, 0, 0]
 
             self.wm = self.wm_pointer
             self.input_device = "wiimote"
             # As soon as the Wiimote is connected, start the loop
             self.start_loop()
-        """
+
         if len(sys.argv) == 3:
             tracker = sys.argv[1]
             pointer = sys.argv[2]
-            name_tracker = None
-            name_pointer = None
             self.wm_tracker = wiimote.connect(tracker, name_tracker)
             self.wm_pointer = wiimote.connect(pointer, name_pointer)
 
-            self.wm_tracker.ir.register_callback(self.get_ir_data)
+            self.wm_tracker.ir.register_callback(self.get_ir_data_of_tracker)
+            self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
+
+            self.wm_pointer.leds = [1, 0, 0, 0]
+            self.wm_tracker.leds = [0, 1, 0, 0]
 
             self.wm = self.wm_pointer
             self.input_device = "wiimote"
@@ -316,12 +334,32 @@ class WiimoteGame(QtWidgets.QWidget):
         sound = self.vocals[vocal_name]
         sound.play()
 
+    # Get the IR data from the "Pointer" Wiimote
+    def get_ir_data_of_pointer(self, ir_data):
+        if len(ir_data) == 4:
+            led_one = (ir_data[0]["x"], ir_data[0]["y"])
+            led_two = (ir_data[1]["x"], ir_data[1]["y"])
+            led_three = (ir_data[2]["x"], ir_data[2]["y"])
+            led_four = (ir_data[3]["x"], ir_data[3]["y"])
+
+            self.pointing = Pointing()
+
+            # print(led_one, led_two, led_three, led_four)
+            x, y = self.pointing.process_ir_data(led_one, led_two, led_three, led_four)
+            pygame.mouse.set_pos([x, y])
+
+
     # Get the IR data from the "Tacker" Wiimote
-    def get_ir_data(self, ir_data):
+    def get_ir_data_of_tracker(self, ir_data):
+        print(ir_data)
         if len(ir_data) == 2:
+            print("Found two points")
             left = (ir_data[0]["x"], ir_data[0]["y"])
             right = (ir_data[1]["x"], ir_data[1]["y"])
+            print(left, right)
             self.invert_points(left, right)
+
+
 
     # Since we want direct movement (e.g move head up -> move player on screen up), the coordinate points need to be inverted. Otherwise, movements will be in the wrong direction
     def invert_points(self, left, right):
@@ -332,7 +370,6 @@ class WiimoteGame(QtWidgets.QWidget):
     # After getting the coordinates of the two LEDs, we need to calculate the point in the middle of the two coordinates. This is the center of our head.
     def calculate_head_center(self, left, right):
         center = ((left[0] + right[0]) / 2, (left[1] + right[1]) / 2)
-        print(center)
         self.to_screen_coordinates(center)
 
     # The coordinates of the head center are for the resolution of the Wiimote IR Cam (1024x768). To position the player correctly on the screen, new coordinates need to be calculated, suited for the resolution of the screen.
@@ -626,6 +663,81 @@ class WiimoteGame(QtWidgets.QWidget):
             freq = [np.abs(fft(avg) / len(avg))[1:len(avg) // 2]]
             self.last_prediction = str(self.c.predict(freq)[0])
             return self.last_prediction
+
+
+"""This class gets the coordinates of four LEDs as input params and calculates the coordinates of point the player is pointing at"""
+class Pointing:
+
+    # Code taken from the Jupyter Notebook "Projective Transformations" from GRIPS
+    def process_ir_data(self, led_one, led_two, led_three, led_four):
+
+        A = led_one
+        B = led_two
+        C = led_three
+        D = led_four
+
+        #The following 16 lines of code responsible for sorting are taken from the file "transform.py" of Andrea Fischers and Miriam Schlindweins solution of of Assignment09
+        points = [A, B, C, D]
+        points = sorted(points, key=lambda k: k[0])
+
+        if points[0][1] < points[1][1]:
+            A = points[0]
+            B = points[1]
+        else:
+            A = points[1]
+            B = points[0]
+
+        if points[2][1] < points[3][1]:
+            D = points[2]
+            C = points[3]
+        else:
+            D = points[3]
+            C = points[2]
+
+
+        #TEMP:
+        DESTINATION_SCREEN_WIDTH = 1920
+        DESTINATION_SCREEN_HEIGHT = 1080
+
+         # Step 1
+        source_points_123 = np.matrix([[A[0], B[0], C[0]], [A[1], B[1], C[1]], [1, 1, 1]])
+        source_point_4 = [[D[0]], [D[1]], [1]]
+
+        scale_to_source = np.linalg.solve(source_points_123, source_point_4)
+        l, m, t = [float(x) for x in scale_to_source]
+
+        # Step 2
+        unit_to_source = np.matrix([[l * A[0], m * B[0], t * C[0]], [l * A[1], m * B[1], t* C[1]], [l, m, t]])
+
+        # Step 3
+        A2 = 0, DESTINATION_SCREEN_HEIGHT
+        B2 = 0, 0
+        C2 = DESTINATION_SCREEN_WIDTH, 0
+        D2 = DESTINATION_SCREEN_WIDTH, DESTINATION_SCREEN_HEIGHT
+
+        dest_points_123 = np.matrix([[A2[0], B2[0], C2[0]], [A2[1], B2[1], C2[1]], [1 , 1, 1]])
+
+        dest_point_4 = np.matrix([[D2[0]], [D2[1]], [1]])
+
+        scale_to_dest = np.linalg.solve(dest_points_123, dest_point_4)
+        l,m,t = [float(x) for x in scale_to_dest]
+
+        unit_to_dest = np.matrix([[l * A2[0], m * B2[0], t * C2[0]], [l * A2[1], m * B2[1], t * C2[1]],  [l, m, t]])
+
+        # Step 4: Invert  A  to obtain  A−1
+        source_to_unit = np.linalg.inv(unit_to_source)
+
+        # Step 5: Compute the combined matrix
+        source_to_dest = unit_to_dest @ source_to_unit
+
+        # Step 6: To map a location  (x,y)  from the source image to its corresponding location in the destination image, compute the product
+        x,y,z = [float(w) for w in (source_to_dest @ np.matrix([[512], [384], [1]]))]
+
+        # step 7: dehomogenization
+        x = int(x / z)
+        y = int(y / z)
+
+        return x, y
 
 
 def main():
