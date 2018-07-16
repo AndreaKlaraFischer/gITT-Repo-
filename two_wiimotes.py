@@ -5,6 +5,7 @@ import sys
 import pygame
 import wiimote
 import math
+from random import randint
 from PyQt5 import QtWidgets, QtCore, QtGui
 import numpy as np
 from scipy import fft
@@ -20,10 +21,15 @@ img_dir = path.join(path.dirname(__file__), 'img')
 # explosion: http://1.bp.blogspot.com/-h4gHvGnPfH0/UmFUg1riZlI/AAAAAAAAAFU/FGgUImTIGbU/s640/explosjon3.png
 # circle (temporary): https://www.kisspng.com/png-circle-rainbow-free-content-clip-art-rainbow-borde-175522/download-png.html
 # from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
+# Sound "shot.wav": https://freesound.org/people/LeMudCrab/sounds/163455/ (CC0 1.0)
+# Sound "reload.wav": https://freesound.org/people/niamhd00145229/sounds/422688/ (CC0 1.0)
 
 class Constants:
     WIIMOTE_IR_CAM_WIDTH = 1024
+    ENEMY_DELAY = 30
+    DURATION_BETWEEN_ENEMIES = 100
     WIIMOTE_IR_CAM_HEIGHT = 768
+    CROSSHAIR_SIZE  = 60
     WIIMOTE_IR_CAM_CENTER = (WIIMOTE_IR_CAM_WIDTH/2, WIIMOTE_IR_CAM_HEIGHT/2)
 
     #WIDTH = pygame.display.get_surface().get_width()
@@ -51,7 +57,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.y = y
 
         # init
-        self.enemy_delay = 50
+        self.enemy_delay = Constants.ENEMY_DELAY
         self.lose_live = False
         self.explosion_sprite = []
         self.collisionY = False
@@ -83,22 +89,22 @@ class Enemy(pygame.sprite.Sprite):
         if self.rect.centerx > px:
             self.rect.centerx -= speed
             self.collisionX = False
-            self.enemy_delay = 50
+            self.enemy_delay = Constants.ENEMY_DELAY
         elif self.rect.centerx < px:
             self.rect.centerx += speed
             self.collisionX = False
-            self.enemy_delay = 50
+            self.enemy_delay = Constants.ENEMY_DELAY
         else:
             self.collisionX = True
         # Movement along y direction
         if self.rect.centery < py:
             self.rect.centery += speed
             self.collisionY = False
-            self.enemy_delay = 50
+            self.enemy_delay = Constants.ENEMY_DELAY
         elif self.rect.centery > py:
             self.rect.centery -= speed
             self.collisionY = False
-            self.enemy_delay = 50
+            self.enemy_delay = Constants.ENEMY_DELAY
         else:
             self.collisionY = True
         if self.collisionY == True & self.collisionX == True:
@@ -117,7 +123,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.x = 10
         self.rect.y = 10
         self.lose_live = False
-        self.enemy_delay = 50
+        self.enemy_delay = Constants.ENEMY_DELAY
 
 # from http://kidscancode.org/blog/2016/08/pygame_shmup_part_1/
 class Player(pygame.sprite.Sprite):
@@ -131,8 +137,8 @@ class Player(pygame.sprite.Sprite):
         self.rect.centerx = self.WIDTH / 2
         self.rect.bottom = self.HEIGHT - 200
         self.speedx = 0
-        self.x = 0
-        self.y = 0
+        self.centerx = self.WIDTH /2
+        self.centery = self.HEIGHT/2
 
     def set_player_coordinates(self, x, y):
         self.x = x
@@ -157,8 +163,8 @@ class Player(pygame.sprite.Sprite):
         self.rect.x += self.speedx
         self.rect.y += self.speedy
         """
-        self.rect.x = self.x
-        self.rect.y = self.y
+        self.rect.x = self.centerx
+        self.rect.y = self.centery
 
         # prevents the player to get outside of the screen
         if self.rect.right > self.WIDTH:
@@ -182,7 +188,7 @@ class Crosshairs(pygame.sprite.Sprite):
         self.WIDTH = pygame.display.get_surface().get_width()
         self.HEIGHT = pygame.display.get_surface().get_height()
         self.image = self.crosshair_img
-        self.image = pygame.transform.scale(self.crosshair_img, (30, 30))
+        self.image = pygame.transform.scale(self.crosshair_img, (Constants.CROSSHAIR_SIZE, Constants.CROSSHAIR_SIZE))
         self.image.set_colorkey((0,0,0))
         self.radius = 10
         self.rect = self.image.get_rect()
@@ -205,9 +211,13 @@ class WiimoteGame(QtWidgets.QWidget):
         self.WIIMOTE_IR_CAM_HEIGHT = 768
         self.WIIMOTE_IR_CAM_CENTER = (self.WIIMOTE_IR_CAM_WIDTH/2, self.WIIMOTE_IR_CAM_HEIGHT/2)
 
-        self.loop_timer = QtCore.QTimer()
+        self.pointer_x_values = []
+        self.pointer_y_values = []
+
+        self.sounds = {}
+
         self.init_pygame()
-        self.input_device = None
+        self.input_device = "wiimote"
         self.connect_wiimotes()
 
     def init_pygame(self):
@@ -216,11 +226,12 @@ class WiimoteGame(QtWidgets.QWidget):
         self.init_sprites()
         # updates complete pygame display
         pygame.display.flip()
+        self.clock = pygame.time.Clock()
         self.init_sounds()
 
     def init_canvas(self):
        # specific screensize for development, i.e. for displaying the console etc.:
-       # self.screen = pygame.display.set_mode((500, 500))
+       #self.screen = pygame.display.set_mode((500, 500))
        # production mode with fullscreen:
        self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
        self.WIDTH = pygame.display.get_surface().get_width()
@@ -261,10 +272,17 @@ class WiimoteGame(QtWidgets.QWidget):
         self.all_sprites = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.players = pygame.sprite.Group()
-        enemy = Enemy(1, 10, 10, 1)
+        enemy = Enemy(1, 0, 0, 1)
         self.enemies.add(enemy)
-        enemy = Enemy(1, self.WIDTH - 50, 10, 1)
+        enemy = Enemy(2, self.WIDTH, 0, 1)
         self.enemies.add(enemy)
+
+        enemy = Enemy(3, 0, self.HEIGHT, 1)
+        self.enemies.add(enemy)
+
+        enemy = Enemy(4, self.WIDTH, self.HEIGHT, 1)
+        self.enemies.add(enemy)
+
         self.crosshairs = Crosshairs()
         self.all_sprites.add(self.crosshairs)
         self.player = Player()
@@ -277,11 +295,21 @@ class WiimoteGame(QtWidgets.QWidget):
     def init_sounds(self):
         try:
             # Init Sounds here (the soundfiles need to be in folder "assets"
-            # pygame.mixer.music.load(os.path.join("assets", "instrumental.wav"))
-            print()
+            self.sounds = {
+                "shot": pygame.mixer.Sound(path.join("assets", "shot.wav")),
+                "reload": pygame.mixer.Sound(path.join("assets", "reload.wav"))
+            }
+            print(path.join("sounds", "stronger.wav"))
+            print(self.sounds)
         except pygame.error:
-            print("Missing audio file!")
+            print("Missing audio files!")
+            print(pygame.error)
             sys.exit()
+
+    # Play a sound saved in the sounds dictionary
+    def play_sound(self, sound_name):
+        sound = self.sounds[sound_name]
+        sound.play()
 
     # Start the pairing process, like in wiimote_demo.py
     def connect_wiimotes(self):
@@ -290,13 +318,12 @@ class WiimoteGame(QtWidgets.QWidget):
         name_pointer = None
 
         if len(sys.argv) == 1:
-            pointer = "B8:AE:6E:55:B5:0F"
+            # mode with hardcoded bluetooth mac adresses; no arguments should be passed
             tracker = "00:1e:a9:36:9b:34"
+            pointer = "B8:AE:6E:55:B5:0F"
             self.wm_pointer = wiimote.connect(pointer, name_pointer)
             self.wm_tracker = wiimote.connect(tracker, name_tracker)
 
-            self.wm_tracker.ir.set_mode(self.wm_tracker.ir.MODE_FULL)
-            self.wm_tracker.ir.set_sensitivity(5)
 
             self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
             self.wm_tracker.ir.register_callback(self.get_ir_data_of_tracker)
@@ -308,7 +335,19 @@ class WiimoteGame(QtWidgets.QWidget):
             self.input_device = "wiimote"
             # As soon as the Wiimote is connected, start the loop
             self.start_loop()
+        if len(sys.argv) == 2:
+            # mode with one hardcoded bluetooth mac adress; one argument should be passed
+            pointer = "B8:AE:6E:F1:39:81"
+            self.wm_pointer = wiimote.connect(pointer, name_pointer)
+            #self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
 
+            self.wm_pointer.leds = [1, 0, 0, 0]
+
+            self.wm = self.wm_pointer
+            self.input_device = "wiimote"
+            # As soon as the Wiimote is connected, start the loop
+            self.start_loop()
+        # mode with bluetooth mac adresses on stdin, 2 adresses should be passed
         if len(sys.argv) == 3:
             tracker = sys.argv[1]
             pointer = sys.argv[2]
@@ -317,7 +356,6 @@ class WiimoteGame(QtWidgets.QWidget):
 
             self.wm_tracker.ir.register_callback(self.get_ir_data_of_tracker)
             self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
-
             self.wm_pointer.leds = [1, 0, 0, 0]
             self.wm_tracker.leds = [0, 1, 0, 0]
 
@@ -325,14 +363,10 @@ class WiimoteGame(QtWidgets.QWidget):
             self.input_device = "wiimote"
             # As soon as the Wiimote is connected, start the loop
             self.start_loop()
-        else:
+        # mode with mouse for testing purposes
+        elif len(sys.argv) == 4:
             self.input_device = "mouse"
             self.start_loop()
-
-    # Play a sound saved in the vocals dictionary
-    def play_sound(self, vocal_name):
-        sound = self.vocals[vocal_name]
-        sound.play()
 
     # Get the IR data from the "Pointer" Wiimote
     def get_ir_data_of_pointer(self, ir_data):
@@ -342,45 +376,53 @@ class WiimoteGame(QtWidgets.QWidget):
             led_three = (ir_data[2]["x"], ir_data[2]["y"])
             led_four = (ir_data[3]["x"], ir_data[3]["y"])
 
+            if led_one[0] == 1023 and led_one[1] == 1023:
+                return
+
             self.pointing = Pointing()
 
             # print(led_one, led_two, led_three, led_four)
             x, y = self.pointing.process_ir_data(led_one, led_two, led_three, led_four)
-            pygame.mouse.set_pos([x, y])
+
+            self.pointer_x_values.append(x)
+            self.pointer_y_values.append(y)
+            if len(self.pointer_x_values) == 5:
+                self.play_sound("shot")
+                filtered_x, filtered_y = self.moving_average(self.pointer_x_values, self.pointer_y_values)
+                print(self.pointer_x_values)
+                self.pointer_x_values = []
+                self.pointer_y_values = []
+                pygame.mouse.set_pos([filtered_x, filtered_y])
+
+    # Simple implementation
+    def moving_average(self, x_values, y_values):
+        sum_of_x = 0
+        sum_of_y = 0
+        for i in range(len(x_values)):
+            sum_of_x += x_values[i]
+            sum_of_y += y_values[i]
+
+        filtered_x = sum_of_x/len(x_values)
+        filtered_y = sum_of_y/len(y_values)
+
+        return filtered_x, filtered_y
 
 
     # Get the IR data from the "Tacker" Wiimote
     def get_ir_data_of_tracker(self, ir_data):
-        print(ir_data)
         if len(ir_data) == 2:
-            print("Found two points")
             left = (ir_data[0]["x"], ir_data[0]["y"])
             right = (ir_data[1]["x"], ir_data[1]["y"])
+
             print(left, right)
-            self.invert_points(left, right)
 
+            if left[0] == 1023 and left[1] == 1023:
+                return
 
-
-    # Since we want direct movement (e.g move head up -> move player on screen up), the coordinate points need to be inverted. Otherwise, movements will be in the wrong direction
-    def invert_points(self, left, right):
-        left = (self.WIIMOTE_IR_CAM_WIDTH - left[0], self.WIIMOTE_IR_CAM_HEIGHT - left[1])
-        right = (self.WIIMOTE_IR_CAM_WIDTH - right[0], self.WIIMOTE_IR_CAM_HEIGHT - right[1])
-        self.calculate_head_center(left, right)
-
-    # After getting the coordinates of the two LEDs, we need to calculate the point in the middle of the two coordinates. This is the center of our head.
-    def calculate_head_center(self, left, right):
-        center = ((left[0] + right[0]) / 2, (left[1] + right[1]) / 2)
-        self.to_screen_coordinates(center)
-
-    # The coordinates of the head center are for the resolution of the Wiimote IR Cam (1024x768). To position the player correctly on the screen, new coordinates need to be calculated, suited for the resolution of the screen.
-    def to_screen_coordinates(self, center):
-        x_on_screen = int((center[0] / self.WIIMOTE_IR_CAM_WIDTH) * self.WIDTH)
-        y_on_screen = int((center[1] / self.WIIMOTE_IR_CAM_HEIGHT) * self.HEIGHT)
-
-        print("X on screen: ", x_on_screen)
-        print("Y on screen: ", y_on_screen)
-        # Pass the coordinates to the player.
-        self.player.set_player_coordinates(x_on_screen, y_on_screen)
+            self.tracking = Tracking()
+            x_on_screen, y_on_screen = self.tracking.process_ir_data(left, right)
+            # Pass the coordinates to the player.
+            self.player.set_player_coordinates(x_on_screen, y_on_screen)
 
     # Starting the game loop
     def start_loop(self):
@@ -396,22 +438,29 @@ class WiimoteGame(QtWidgets.QWidget):
         self.highscore = 0
         self.level = 1
         self.level_seconds_counter = 0
+        self.reload_delay = 50
+
         self.hit_enemy = None
         self.new_training_values = [[], [], []]
         self.shooted_enemy = None
         self.prediction_values = [[], [], []]
         self.c = svm.SVC()
+        self.game_over = False
+
         self.shoot_enemy_anim_iterator = 0
         self.minlen = 100000  # Just a large value to begin with
-        self.loop_timer.setSingleShot(False)
-        self.loop_timer.timeout.connect(self.loop_iteration)
-        self.loop_timer.start(60)
+
+        running = True
+        while running:
+            self.loop_iteration()
+
 
 
     def switch_draw_shoot_mode(self):
         if self.input_device == "wiimote":
             # handles drawing mode and disables shooting while drawing
             # allows drawing when the A button on the wiimote is pressed
+
             if self.wm_pointer.buttons['A']:
                 self.game_mode = "draw"
                 # todo: draw a shield on the screen --> limit size and duration of appearance
@@ -423,24 +472,27 @@ class WiimoteGame(QtWidgets.QWidget):
                     x = self.wm_pointer.accelerometer[0]
                     y = self.wm_pointer.accelerometer[1]
                     self.player_shoot(x,y)
-                else:
-                    print("shooting not possible, reloading necessary")
+                    print(x,y)
+
+
+
 
     # if the player shoots an enemy
     def player_shoot(self,x,y):
+        if self.check_munition_available() == True:
+            self.munition_counter -= 1
+
+        else:
+            print("no munition. press RETURN on keyboard or shake wiimote")
+        # todo: or instead of removing make enemy smaller before it completely disappears?
+
         # check for each enemy, if the mouse or wiimote, i.e. x and y are within an enemy
         for enemy in self.enemies:
             dist = math.hypot(x - enemy.rect.centerx, y - enemy.rect.centery)
             # needs to be smaller than enemy radius
             if dist < 25:
-                if self.check_munition_available() == True:
-                    self.munition_counter -= 1
-                    self.highscore += 100
-                    self.shot_enemy = True
-                    self.shooted_enemy = enemy
-                else:
-                    print("no munition. press RETURN on keyboard or shake wiimote")
-                # todo: or instead of removing make enemy smaller before it completely disappears?
+                self.shot_enemy = True
+                self.shooted_enemy = enemy
 
 
     # checks if the player is overlapped by an enemy
@@ -454,71 +506,102 @@ class WiimoteGame(QtWidgets.QWidget):
                 if (self.lives > 0):
                     self.lives -= 1
                 else:
+                    self.game_over = True
                     print("show highscore screen")
                     # todo: implement highscore screen stuff and csv saving
 
    # counts minutes and adds a new enemy after each minute
     def check_level(self):
-        if self.level_seconds_counter > 600:
+        position_arr_x = [0,self.WIDTH]
+        position_arr_y = [0, self.HEIGHT]
+        if self.level_seconds_counter > Constants.DURATION_BETWEEN_ENEMIES:
             self.level_seconds_counter = 0
             self.level += 1
-            enemy = Enemy(1, self.WIDTH/2, 0, 1)
+            enemy = Enemy(1, position_arr_x[randint(0, 1)], position_arr_y[randint(0,1)], 1)
             self.enemies.add(enemy)
         else:
             self.level_seconds_counter +=1
 
     # One iteration of the loop
     def loop_iteration(self):
-        self.highscore += 1
-        self.check_level()
-        self.switch_draw_shoot_mode()
-        # todo: add check for shields
+        if self.game_over == False:
+            self.clock.tick(60)
+            self.check_level()
+            self.switch_draw_shoot_mode()
+            # todo: add check for shields
 
-        # updates the enemies and moves them
-        self.enemies.update()
-        self.all_sprites.update()
+            # updates the enemies and moves them
+            self.enemies.update()
+            self.all_sprites.update()
 
-        # enemy should follow the player
-        for enemy in self.enemies:
-            enemy.move_towards_player(self.player)
+            # enemy should follow the player
+            for enemy in self.enemies:
+                enemy.move_towards_player(self.player)
 
-        # check for overlapping with enemy
-        self.check_enemy_behind()
+            # check for overlapping with enemy
+            self.check_enemy_behind()
 
-        # draws explosion, if the player has shot an enemy
-        self.draw_explosion()
+            # draws explosion, if the player has shot an enemy
+            self.draw_explosion()
 
-        # update the screen and draw all sprites on new positions
-        self.screen.fill((100, 100, 100))
-        self.enemies.draw(self.screen)
-        self.all_sprites.draw(self.screen)
+            # update the screen and draw all sprites on new positions
+            self.screen.fill((100, 100, 100))
+            self.enemies.draw(self.screen)
+            self.all_sprites.draw(self.screen)
 
-        # recognize gesture
-        if self.input_device == "wiimote":
-            self.recognize_activity(self.wm_pointer.accelerometer)
+            # recognize gesture
+            if self.input_device == "wiimote":
+                if (self.get_rotation() == True):
+                    self.recognize_activity(self.wm_pointer.accelerometer)
 
-        # updates info line on top and munition line on bottom of the game canvas
-        self.drawInfoLine("Lives: " + str(self.lives) + "/5 Gesture: " + self.predicted_activity + " Highscore: " + str(
+            # updates info line on top and munition line on bottom of the game canvas
+            self.drawInfoLine(
+                "Lives: " + str(self.lives) + "/5 Gesture: " + self.predicted_activity + " Highscore: " + str(
                     self.highscore))
-        self.drawMunitionLine(str(self.munition_counter) + "/20")
-        pygame.display.update(self.munition_line.get_rect())
-        pygame.display.update(self.info_line_top.get_rect())
+            self.drawMunitionLine(str(self.munition_counter) + "/20")
+            pygame.display.update(self.munition_line.get_rect())
+            pygame.display.update(self.info_line_top.get_rect())
 
-        pygame.display.flip()
-        self.init_pygame_events()
+            pygame.display.flip()
+            self.init_pygame_events()
+
+        else:
+            self.clock.tick(60)
+
+            self.screen.fill((100, 100, 100))
+
+
+            font = pygame.font.Font(None, 36)
+            self.text = font.render("You lost!", 1, (10, 10, 10))
+            textpos = self.text.get_rect()
+            self.screen.blit(self.text, (250, 250))
+
+            pygame.display.flip()
+            self.init_pygame_events()
+
+
+
+    def get_rotation(self):
+        if self.wm.accelerometer[1] < 450:
+            return True
+
+
 
     # draws an explosion animation, if the player has just shot an enemy
     def draw_explosion(self):
-        if self.shot_enemy == True:
-            # increase the number of the enemy sprite image with each tick and draw image
-            if self.shoot_enemy_anim_iterator < self.shooted_enemy.get_explosion_duration():
-                self.shooted_enemy.explode(self.shoot_enemy_anim_iterator)
-                self.shoot_enemy_anim_iterator += 1
-            else:
-                self.enemies.remove(self.shooted_enemy)
-                self.shot_enemy = False
-                self.shoot_enemy_anim_iterator = 0
-                self.shooted_enemy = None
+        if self.munition_counter > 0:
+            if self.shot_enemy == True:
+                # increase the number of the enemy sprite image with each tick and draw image
+                if self.shoot_enemy_anim_iterator < self.shooted_enemy.get_explosion_duration():
+                    self.shooted_enemy.explode(self.shoot_enemy_anim_iterator)
+                    self.shoot_enemy_anim_iterator += 1
+                else:
+                    self.highscore += 100
+                    self.enemies.remove(self.shooted_enemy)
+                    self.shot_enemy = False
+                    self.shoot_enemy_anim_iterator = 0
+                    self.shooted_enemy = None
+
 
     def init_pygame_events(self):
         # necessary for closing the window in pygame
@@ -560,8 +643,12 @@ class WiimoteGame(QtWidgets.QWidget):
 
         if self.predicted_activity == "reload":
             if self.munition_counter != 20:
-                self.munition_counter = 20
-
+                if self.reload_delay >= 50:
+                    print("reload")
+                    self.reload_delay = 0
+                    self.munition_counter = 20
+                else:
+                    self.reload_delay += 1
 
     def get_categories(self):
         csv_files = glob.glob("*.csv")  # get all csv files from the directory
@@ -738,6 +825,31 @@ class Pointing:
         y = int(y / z)
 
         return x, y
+
+
+"""This class gets the coordinates of the two LEDs of the head tracking device as input and calculates the position of the player on the screen"""
+class Tracking:
+
+    def process_ir_data(self, left, right):
+
+        #Temp:
+        self.WIDTH = 1920
+        self.HEIGHT = 1080
+
+        # Since we want direct movement (e.g move head up -> move player on screen up), the coordinate points need to be inverted. Otherwise, movements will be in the wrong direction
+        inverted_left = (Constants.WIIMOTE_IR_CAM_WIDTH - left[0], Constants.WIIMOTE_IR_CAM_HEIGHT - left[1])
+        inverted_right = (Constants.WIIMOTE_IR_CAM_WIDTH - right[0], Constants.WIIMOTE_IR_CAM_HEIGHT - right[1])
+
+        # After getting the coordinates of the two LEDs, we need to calculate the point in the middle of the two coordinates. This is the center of our head.
+        center = ((inverted_left[0] + inverted_right[0]) / 2, (inverted_left[1] + inverted_right[1]) / 2)
+
+        # The coordinates of the head center are for the resolution of the Wiimote IR Cam (1024x768). To position the player correctly on the screen, new coordinates need to be calculated, suited for the resolution of the screen.
+        x_on_screen = int((center[0] / Constants.WIIMOTE_IR_CAM_WIDTH) * self.WIDTH)
+        y_on_screen = int((center[1] / Constants.WIIMOTE_IR_CAM_HEIGHT) * self.HEIGHT)
+
+        print("X on screen: ", x_on_screen)
+        print("Y on screen: ", y_on_screen)
+        return x_on_screen, y_on_screen
 
 
 def main():
