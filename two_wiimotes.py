@@ -5,6 +5,7 @@ import sys
 import pygame
 import wiimote
 import math
+import time
 from random import randint
 from PyQt5 import QtWidgets, QtCore, QtGui
 import numpy as np
@@ -29,7 +30,7 @@ class Constants:
     ENEMY_DELAY = 30
     DURATION_BETWEEN_ENEMIES = 100
     WIIMOTE_IR_CAM_HEIGHT = 768
-    CROSSHAIR_SIZE  = 60
+    CROSSHAIR_SIZE  = 100
     WIIMOTE_IR_CAM_CENTER = (WIIMOTE_IR_CAM_WIDTH/2, WIIMOTE_IR_CAM_HEIGHT/2)
 
     #WIDTH = pygame.display.get_surface().get_width()
@@ -141,8 +142,8 @@ class Player(pygame.sprite.Sprite):
         self.centery = self.HEIGHT/2
 
     def set_player_coordinates(self, x, y):
-        self.x = x
-        self.y = y
+        self.centerx = x
+        self.centery = y
 
     # moves player based on keyboard input
     # todo: change player movement by headtracking coordinates
@@ -215,6 +216,8 @@ class WiimoteGame(QtWidgets.QWidget):
         self.pointer_y_values = []
 
         self.sounds = {}
+
+        self.last_button_press = time.time()
 
         self.init_pygame()
         self.input_device = "wiimote"
@@ -387,7 +390,6 @@ class WiimoteGame(QtWidgets.QWidget):
             self.pointer_x_values.append(x)
             self.pointer_y_values.append(y)
             if len(self.pointer_x_values) == 5:
-                self.play_sound("shot")
                 filtered_x, filtered_y = self.moving_average(self.pointer_x_values, self.pointer_y_values)
                 print(self.pointer_x_values)
                 self.pointer_x_values = []
@@ -454,8 +456,6 @@ class WiimoteGame(QtWidgets.QWidget):
         while running:
             self.loop_iteration()
 
-
-
     def switch_draw_shoot_mode(self):
         if self.input_device == "wiimote":
             # handles drawing mode and disables shooting while drawing
@@ -469,11 +469,21 @@ class WiimoteGame(QtWidgets.QWidget):
                 # disables drawing when shooted
                 # allows shooting when the B button on the wiimote is pressed
                 if self.wm_pointer.buttons['B']:
-                    x = self.wm_pointer.accelerometer[0]
-                    y = self.wm_pointer.accelerometer[1]
-                    self.player_shoot(x,y)
-                    print(x,y)
+                    if self.new_click_ok(time.time()):
+                        x = self.wm_pointer.accelerometer[0]
+                        y = self.wm_pointer.accelerometer[1]
+                        self.player_shoot(x,y)
+                        print(x,y)
 
+    # Check if a button press on the wiimote has happened within the last 0.1 seconds
+    # This prevents a sound from being played twice if a user presses a button too long.
+    def new_click_ok(self, current_time):
+        if current_time - self.last_button_press > 0.1:
+            self.last_button_press = current_time
+            return True
+        else:
+            self.last_button_press = current_time
+            return False
 
 
 
@@ -481,16 +491,18 @@ class WiimoteGame(QtWidgets.QWidget):
     def player_shoot(self,x,y):
         if self.check_munition_available() == True:
             self.munition_counter -= 1
+            self.play_sound("shot")
 
         else:
             print("no munition. press RETURN on keyboard or shake wiimote")
+            return
         # todo: or instead of removing make enemy smaller before it completely disappears?
 
         # check for each enemy, if the mouse or wiimote, i.e. x and y are within an enemy
         for enemy in self.enemies:
             dist = math.hypot(x - enemy.rect.centerx, y - enemy.rect.centery)
             # needs to be smaller than enemy radius
-            if dist < 25:
+            if dist < 50:
                 self.shot_enemy = True
                 self.shooted_enemy = enemy
 
