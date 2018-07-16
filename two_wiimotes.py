@@ -389,7 +389,7 @@ class WiimoteGame(QtWidgets.QWidget):
 
             self.pointer_x_values.append(x)
             self.pointer_y_values.append(y)
-            if len(self.pointer_x_values) == 5:
+            if len(self.pointer_x_values) == 10:
                 filtered_x, filtered_y = self.moving_average(self.pointer_x_values, self.pointer_y_values)
                 print(self.pointer_x_values)
                 self.pointer_x_values = []
@@ -470,10 +470,9 @@ class WiimoteGame(QtWidgets.QWidget):
                 # allows shooting when the B button on the wiimote is pressed
                 if self.wm_pointer.buttons['B']:
                     if self.new_click_ok(time.time()):
-                        x = self.wm_pointer.accelerometer[0]
-                        y = self.wm_pointer.accelerometer[1]
+                        x = pygame.mouse.get_pos()[0]
+                        y = pygame.mouse.get_pos()[1]
                         self.player_shoot(x,y)
-                        print(x,y)
 
     # Check if a button press on the wiimote has happened within the last 0.1 seconds
     # This prevents a sound from being played twice if a user presses a button too long.
@@ -488,10 +487,11 @@ class WiimoteGame(QtWidgets.QWidget):
 
 
     # if the player shoots an enemy
-    def player_shoot(self,x,y):
+    def player_shoot(self, x, y):
         if self.check_munition_available() == True:
             self.munition_counter -= 1
             self.play_sound("shot")
+            print("Pos Crosshair", x, y)
 
         else:
             print("no munition. press RETURN on keyboard or shake wiimote")
