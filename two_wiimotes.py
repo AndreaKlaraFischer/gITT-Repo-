@@ -212,12 +212,20 @@ class WiimoteGame(QtWidgets.QWidget):
         self.WIIMOTE_IR_CAM_HEIGHT = 768
         self.WIIMOTE_IR_CAM_CENTER = (self.WIIMOTE_IR_CAM_WIDTH/2, self.WIIMOTE_IR_CAM_HEIGHT/2)
 
+        self.ready_for_prediction = False
+        self.category_list = []
+        self.c = svm.SVC()
+        self.prediction_values = [[], [], []]
+        self.minlen = 1000  # Just a large value to begin with
+
         self.pointer_x_values = []
         self.pointer_y_values = []
 
         self.sounds = {}
 
         self.last_button_press = time.time()
+
+        self.read_data_from_csv()
 
         self.init_pygame()
         self.input_device = "wiimote"
@@ -302,11 +310,8 @@ class WiimoteGame(QtWidgets.QWidget):
                 "shot": pygame.mixer.Sound(path.join("assets", "shot.wav")),
                 "reload": pygame.mixer.Sound(path.join("assets", "reload.wav"))
             }
-            print(path.join("sounds", "stronger.wav"))
-            print(self.sounds)
         except pygame.error:
             print("Missing audio files!")
-            print(pygame.error)
             sys.exit()
 
     # Play a sound saved in the sounds dictionary
@@ -319,6 +324,9 @@ class WiimoteGame(QtWidgets.QWidget):
 
         name_tracker = None
         name_pointer = None
+
+        #for i in range(500):
+            #pygame.gfxdraw.pixel(pygame.display.get_surface(), i, i, pygame.Color.r)
 
         if len(sys.argv) == 1:
             # mode with hardcoded bluetooth mac adresses; no arguments should be passed
@@ -391,7 +399,7 @@ class WiimoteGame(QtWidgets.QWidget):
             self.pointer_y_values.append(y)
             if len(self.pointer_x_values) == 10:
                 filtered_x, filtered_y = self.moving_average(self.pointer_x_values, self.pointer_y_values)
-                print(self.pointer_x_values)
+                #print(self.pointer_x_values)
                 self.pointer_x_values = []
                 self.pointer_y_values = []
                 pygame.mouse.set_pos([filtered_x, filtered_y])
@@ -416,7 +424,7 @@ class WiimoteGame(QtWidgets.QWidget):
             left = (ir_data[0]["x"], ir_data[0]["y"])
             right = (ir_data[1]["x"], ir_data[1]["y"])
 
-            print(left, right)
+            #print(left, right)
 
             if left[0] == 1023 and left[1] == 1023:
                 return
@@ -430,27 +438,26 @@ class WiimoteGame(QtWidgets.QWidget):
     def start_loop(self):
         # todo: check later if all of these are still used
         self.game_mode = "shoot"
-        self.prediction_values = [[], [], []]
+        # self.prediction_values = [[], [], []]
         self.last_prediction = "Waiting for data..."
         self.predicted_activity = "-"
-        self.category_list = []
+        # self.category_list = []
         self.munition_counter = 20
         self.lives = 5
         self.shot_enemy = False
         self.highscore = 0
         self.level = 1
         self.level_seconds_counter = 0
-        self.reload_delay = 50
+        self.reload_delay = 5
 
         self.hit_enemy = None
         self.new_training_values = [[], [], []]
         self.shooted_enemy = None
-        self.prediction_values = [[], [], []]
-        self.c = svm.SVC()
+        #self.c = svm.SVC()
         self.game_over = False
 
         self.shoot_enemy_anim_iterator = 0
-        self.minlen = 100000  # Just a large value to begin with
+        #self.minlen = 100000  # Just a large value to begin with
 
         running = True
         while running:
@@ -491,7 +498,7 @@ class WiimoteGame(QtWidgets.QWidget):
         if self.check_munition_available() == True:
             self.munition_counter -= 1
             self.play_sound("shot")
-            print("Pos Crosshair", x, y)
+            #print("Pos Crosshair", x, y)
 
         else:
             print("no munition. press RETURN on keyboard or shake wiimote")
@@ -563,7 +570,6 @@ class WiimoteGame(QtWidgets.QWidget):
 
             # recognize gesture
             if self.input_device == "wiimote":
-                if (self.get_rotation() == True):
                     self.recognize_activity(self.wm_pointer.accelerometer)
 
             # updates info line on top and munition line on bottom of the game canvas
@@ -648,15 +654,15 @@ class WiimoteGame(QtWidgets.QWidget):
 
         # todo: if available, recognizing should be started, and if not add training data with gesture name
         # checks for available training data.
-        self.read_data_from_csv()
-        self.predicted_activity = self.predict_activity(x_acc,y_acc,z_acc)
-
-
-
-        if self.predicted_activity == "reload":
-            if self.munition_counter != 20:
-                if self.reload_delay >= 50:
+        # self.read_data_from_csv()
+        self.predicted_activity = self.predict_activity(x_acc, y_acc, z_acc)
+        print(self.predicted_activity)
+        print("Pointing upwards: ", self.get_rotation())
+        if self.predicted_activity == "reload" and self.get_rotation() == True:
+            if self.munition_counter == 0:
+                if self.reload_delay >= 5:
                     print("reload")
+                    self.play_sound("reload")
                     self.reload_delay = 0
                     self.munition_counter = 20
                 else:
@@ -708,7 +714,7 @@ class WiimoteGame(QtWidgets.QWidget):
         self.cut_off_data(activities)
 
     def cut_off_data(self, activities):
-        self.minlen = 10000000  # Large number to begin
+        #self.minlen = 10000000  # Large number to begin
         for activity_name, value in activities.items():
             for data in value:
                 num_measurements = len(data)
@@ -740,28 +746,31 @@ class WiimoteGame(QtWidgets.QWidget):
                 training_data.append(value[i])
 
         self.c.fit(training_data, categories)
+        print("Training finished!")
+        self.ready_for_prediction = True
 
     def predict_activity(self, x, y, z):
 
-        if len(self.prediction_values[0]) < self.minlen:
-            self.prediction_values[0].append(x)
-            self.prediction_values[1].append(y)
-            self.prediction_values[2].append(z)
-            return self.last_prediction
-        else:
-            #print(str(self.minlen) + " Values collected:")
-            #print(len(self.prediction_values[0]))
-            avg = []
-            for i in range(len(self.prediction_values[0])):
-                avg.append((self.prediction_values[0][i] + self.prediction_values[1][i] +
-                            self.prediction_values[2][i]) / 3)
+        if self.ready_for_prediction:
+            if len(self.prediction_values[0]) < self.minlen:
+                self.prediction_values[0].append(x)
+                self.prediction_values[1].append(y)
+                self.prediction_values[2].append(z)
+                return self.last_prediction
+            else:
+                print(str(self.minlen) + " Values collected:")
+                print(len(self.prediction_values[0]))
+                avg = []
+                for i in range(len(self.prediction_values[0])):
+                    avg.append((self.prediction_values[0][i] + self.prediction_values[1][i] +
+                                self.prediction_values[2][i]) / 3)
 
-            self.prediction_values = [[], [], []]
+                self.prediction_values = [[], [], []]
 
-            # This line is taken from the "Wiimote - FFT - SVM" notebook from Grips
-            freq = [np.abs(fft(avg) / len(avg))[1:len(avg) // 2]]
-            self.last_prediction = str(self.c.predict(freq)[0])
-            return self.last_prediction
+                # This line is taken from the "Wiimote - FFT - SVM" notebook from Grips
+                freq = [np.abs(fft(avg) / len(avg))[1:len(avg) // 2]]
+                self.last_prediction = str(self.c.predict(freq)[0])
+                return self.last_prediction
 
 
 """This class gets the coordinates of four LEDs as input params and calculates the coordinates of point the player is pointing at"""
