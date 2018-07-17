@@ -242,9 +242,9 @@ class WiimoteGame(QtWidgets.QWidget):
 
     def init_canvas(self):
        # specific screensize for development, i.e. for displaying the console etc.:
-       #self.screen = pygame.display.set_mode((500, 500))
+       self.screen = pygame.display.set_mode((500, 500))
        # production mode with fullscreen:
-       self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+       #self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
        self.WIDTH = pygame.display.get_surface().get_width()
        self.HEIGHT = pygame.display.get_surface().get_height()
        pygame.display.set_caption('ITT Final Project')
@@ -330,8 +330,8 @@ class WiimoteGame(QtWidgets.QWidget):
 
         if len(sys.argv) == 1:
             # mode with hardcoded bluetooth mac adresses; no arguments should be passed
-            tracker = "00:1e:a9:36:9b:34"
-            pointer = "B8:AE:6E:55:B5:0F"
+            tracker = "B8:AE:6E:1B:5B:03"
+            pointer = "B8:AE:6E:F1:39:81"
             self.wm_pointer = wiimote.connect(pointer, name_pointer)
             self.wm_tracker = wiimote.connect(tracker, name_tracker)
 
@@ -348,9 +348,9 @@ class WiimoteGame(QtWidgets.QWidget):
             self.start_loop()
         if len(sys.argv) == 2:
             # mode with one hardcoded bluetooth mac adress; one argument should be passed
-            pointer = "B8:AE:6E:F1:39:81"
+            pointer = "B8:AE:6E:1B:5B:03"
             self.wm_pointer = wiimote.connect(pointer, name_pointer)
-            #self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
+            self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
 
             self.wm_pointer.leds = [1, 0, 0, 0]
 
@@ -446,6 +446,7 @@ class WiimoteGame(QtWidgets.QWidget):
         self.lives = 5
         self.shot_enemy = False
         self.highscore = 0
+        self.restarted = False
         self.level = 1
         self.level_seconds_counter = 0
         self.reload_delay = 5
@@ -471,6 +472,33 @@ class WiimoteGame(QtWidgets.QWidget):
             if self.wm_pointer.buttons['A']:
                 self.game_mode = "draw"
                 # todo: draw a shield on the screen --> limit size and duration of appearance
+            elif self.wm_pointer.buttons['Home']:
+                print("tesit")
+                self.munition_counter = 20
+                self.lives = 5
+                self.shot_enemy = False
+                self.highscore = 0
+                self.level = 1
+                self.level_seconds_counter = 0
+                self.reload_delay = 5
+
+                self.hit_enemy = None
+                self.new_training_values = [[], [], []]
+                self.shooted_enemy = None
+                # self.c = svm.SVC()
+
+                self.shoot_enemy_anim_iterator = 0
+
+                self.game_over = False
+                self.restarted = True
+                for enemy in self.enemies:
+                    self.enemies.remove(enemy)
+
+                for sprite in self.all_sprites:
+                    self.all_sprites.remove(sprite)
+                self.screen.fill((100, 100, 100))
+                self.init_sprites()
+                pygame.display.flip()
             else:
                 self.game_mode = "shoot"
                 # disables drawing when shooted
@@ -525,7 +553,11 @@ class WiimoteGame(QtWidgets.QWidget):
                 if (self.lives > 0):
                     self.lives -= 1
                 else:
-                    self.game_over = True
+                    if self.restarted == True:
+                        self.game_over = False
+
+                    else:
+                        self.game_over = True
                     print("show highscore screen")
                     # todo: implement highscore screen stuff and csv saving
 
@@ -544,6 +576,7 @@ class WiimoteGame(QtWidgets.QWidget):
     # One iteration of the loop
     def loop_iteration(self):
         if self.game_over == False:
+            self.restarted = False
             self.clock.tick(60)
             self.check_level()
             self.switch_draw_shoot_mode()
@@ -588,9 +621,10 @@ class WiimoteGame(QtWidgets.QWidget):
 
             self.screen.fill((100, 100, 100))
 
+            self.switch_draw_shoot_mode()
 
             font = pygame.font.Font(None, 36)
-            self.text = font.render("You lost!", 1, (10, 10, 10))
+            self.text = font.render("GAME OVER", 1, (10, 10, 10))
             textpos = self.text.get_rect()
             self.screen.blit(self.text, (250, 250))
 
@@ -656,12 +690,12 @@ class WiimoteGame(QtWidgets.QWidget):
         # checks for available training data.
         # self.read_data_from_csv()
         self.predicted_activity = self.predict_activity(x_acc, y_acc, z_acc)
-        print(self.predicted_activity)
-        print("Pointing upwards: ", self.get_rotation())
+
+
         if self.predicted_activity == "reload" and self.get_rotation() == True:
             if self.munition_counter == 0:
                 if self.reload_delay >= 5:
-                    print("reload")
+
                     self.play_sound("reload")
                     self.reload_delay = 0
                     self.munition_counter = 20
@@ -758,8 +792,8 @@ class WiimoteGame(QtWidgets.QWidget):
                 self.prediction_values[2].append(z)
                 return self.last_prediction
             else:
-                print(str(self.minlen) + " Values collected:")
-                print(len(self.prediction_values[0]))
+
+
                 avg = []
                 for i in range(len(self.prediction_values[0])):
                     avg.append((self.prediction_values[0][i] + self.prediction_values[1][i] +
