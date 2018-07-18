@@ -23,12 +23,12 @@ img_dir = path.join(path.dirname(__file__), 'img')
 # circle (temporary): https://www.kisspng.com/png-circle-rainbow-free-content-clip-art-rainbow-borde-175522/download-png.html
 # from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
 # Sound "shot.wav": https://freesound.org/people/LeMudCrab/sounds/163455/ (CC0 1.0)
-# Sound "reload.wav": https://freesound.org/people/niamhd00145229/sounds/422688/ (CC0 1.0)
+# Sound "reload.wav": https://freesound.org/people/IchBinJager/sounds/272068/ by IchBinJager (CC BY 3.0)
 
 class Constants:
     WIIMOTE_IR_CAM_WIDTH = 1024
     ENEMY_DELAY = 30
-    DURATION_BETWEEN_ENEMIES = 100
+    DURATION_BETWEEN_ENEMIES = 150
     WIIMOTE_IR_CAM_HEIGHT = 768
     CROSSHAIR_SIZE  = 100
     WIIMOTE_IR_CAM_CENTER = (WIIMOTE_IR_CAM_WIDTH/2, WIIMOTE_IR_CAM_HEIGHT/2)
@@ -38,36 +38,57 @@ class Constants:
 
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self,  id,x,y,speed):
+    def __init__(self,  id,x,y,speed,randint):
         # todo: create global constants for width and height and all the other hardcoded numbers
         pygame.sprite.Sprite.__init__(self)
         self.id = id
         self.speed = speed
 
         # sets the image of the enemy objects
-        self.circle_img = pygame.image.load(path.join(img_dir, "dummy_circle.png")).convert()
+        self.circle_img = pygame.image.load(path.join(img_dir, str(randint)+".png")).convert()
         self.image = self.circle_img
         # scales down image
         self.image = pygame.transform.scale(self.circle_img, (50, 50))
         # avoids a black background
-        self.image.set_colorkey((0, 0, 0))
+        self.image.set_colorkey((250, 250, 250))
 
         # specifies position of enemy
         self.rect = self.image.get_rect()
         self.rect.x = x
         self.rect.y = y
+        self.enemy_iterator = 0
 
         # init
         self.enemy_delay = Constants.ENEMY_DELAY
         self.lose_live = False
         self.explosion_sprite = []
+        self.enemy_sprite = []
         self.collisionY = False
         self.collisionX = False
+
+        self.all_enemies = []
+        enemy_1 = pygame.image.load(path.join(img_dir, "1.png")).convert()
+        enemy_2 = pygame.image.load(path.join(img_dir, "2.png")).convert()
+
+        enemy_3 = pygame.image.load(path.join(img_dir, "3.png")).convert()
+
+        enemy_4 = pygame.image.load(path.join(img_dir, "4.png")).convert()
+
+        self.all_enemies.append(enemy_1)
+        self.all_enemies.append(enemy_2)
+        self.all_enemies.append(enemy_3)
+        self.all_enemies.append(enemy_4)
+
 
         # creates a list of all explosion images
         for x in range(1, 17):
             explode_img_1 = pygame.image.load(path.join(img_dir, "explosion_" + str(x) + ".png")).convert()
             self.explosion_sprite.append(explode_img_1)
+
+            # creates a list of all explosion images
+        #for x in range(1, 5):
+            #enemy = pygame.image.load(path.join(img_dir, str(x) + ".png")).convert()
+            #self.enemy_sprite.append(enemy)
 
 
     def explode(self, iterator):
@@ -83,6 +104,18 @@ class Enemy(pygame.sprite.Sprite):
 
     # from https://stackoverflow.com/questions/20044791/how-to-make-an-enemy-follow-the-player-in-pygame
     def move_towards_player(self, Player):
+        #if(self.enemy_iterator < len(self.enemy_sprite)-1):
+
+            #self.enemy_iterator += 1
+            #print(self.enemy_iterator)
+        #else:
+            #self.enemy_iterator =0
+            #print(self.enemy_iterator)
+
+        #self.image = pygame.transform.scale(self.enemy_sprite[self.enemy_iterator], (90, 90))
+
+
+        self.image.set_colorkey((0, 0, 0))
         speed = self.speed
         px = Player.rect.centerx
         py = Player.rect.centery
@@ -221,6 +254,10 @@ class WiimoteGame(QtWidgets.QWidget):
         self.pointer_x_values = []
         self.pointer_y_values = []
 
+        self.drawing_x_values = []
+        self.drawing_y_values = []
+        self.currently_drawing = False
+
         self.sounds = {}
 
         self.last_button_press = time.time()
@@ -242,13 +279,13 @@ class WiimoteGame(QtWidgets.QWidget):
 
     def init_canvas(self):
        # specific screensize for development, i.e. for displaying the console etc.:
-       self.screen = pygame.display.set_mode((500, 500))
+       #self.screen = pygame.display.set_mode((500, 500))
        # production mode with fullscreen:
-       #self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+       self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
        self.WIDTH = pygame.display.get_surface().get_width()
        self.HEIGHT = pygame.display.get_surface().get_height()
        pygame.display.set_caption('ITT Final Project')
-       self.drawInfoLine("Waiting for gesture ... ")
+       self.drawInfoLine("")
        self.drawGameCanvas()
        self.drawMunitionLine("20/20")
 
@@ -283,16 +320,16 @@ class WiimoteGame(QtWidgets.QWidget):
         self.all_sprites = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.players = pygame.sprite.Group()
-        enemy = Enemy(1, 0, 0, 1)
+        enemy = Enemy(1, 0, 0, 1,randint(1,5))
         self.enemies.add(enemy)
-        enemy = Enemy(2, self.WIDTH, 0, 1)
-        self.enemies.add(enemy)
+        #enemy = Enemy(2, self.WIDTH, 0, 1)
+        #self.enemies.add(enemy)
 
-        enemy = Enemy(3, 0, self.HEIGHT, 1)
-        self.enemies.add(enemy)
+        #enemy = Enemy(3, 0, self.HEIGHT, 1)
+        #self.enemies.add(enemy)
 
-        enemy = Enemy(4, self.WIDTH, self.HEIGHT, 1)
-        self.enemies.add(enemy)
+        #enemy = Enemy(4, self.WIDTH, self.HEIGHT, 1)
+        #self.enemies.add(enemy)
 
         self.crosshairs = Crosshairs()
         self.all_sprites.add(self.crosshairs)
@@ -308,7 +345,8 @@ class WiimoteGame(QtWidgets.QWidget):
             # Init Sounds here (the soundfiles need to be in folder "assets"
             self.sounds = {
                 "shot": pygame.mixer.Sound(path.join("assets", "shot.wav")),
-                "reload": pygame.mixer.Sound(path.join("assets", "reload.wav"))
+                "reload": pygame.mixer.Sound(path.join("assets", "reload.wav")),
+                "ouch": pygame.mixer.Sound(path.join("assets", "ouch.wav"))
             }
         except pygame.error:
             print("Missing audio files!")
@@ -325,16 +363,30 @@ class WiimoteGame(QtWidgets.QWidget):
         name_tracker = None
         name_pointer = None
 
-        #for i in range(500):
-            #pygame.gfxdraw.pixel(pygame.display.get_surface(), i, i, pygame.Color.r)
+        if len(sys.argv) == 1:
+            # mode with one hardcoded bluetooth mac adress; one argument should be passed
+            pointer = "B8:AE:6E:55:B5:0F"
+            self.wm_pointer = wiimote.connect(pointer, name_pointer)
+            self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
+
+            self.wm_pointer.leds = [1, 0, 0, 0]
+
+            self.wm = self.wm_pointer
+            self.input_device = "wiimote"
+            # As soon as the Wiimote is connected, start the loop
+            self.start_loop()
+
+            return
+
+            self.input_device = "mouse"
+            self.start_loop()
 
         if len(sys.argv) == 1:
             # mode with hardcoded bluetooth mac adresses; no arguments should be passed
-            tracker = "B8:AE:6E:1B:5B:03"
+            tracker = "B8:AE:6E:55:B5:0F"
             pointer = "B8:AE:6E:F1:39:81"
             self.wm_pointer = wiimote.connect(pointer, name_pointer)
             self.wm_tracker = wiimote.connect(tracker, name_tracker)
-
 
             self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
             self.wm_tracker.ir.register_callback(self.get_ir_data_of_tracker)
@@ -348,7 +400,7 @@ class WiimoteGame(QtWidgets.QWidget):
             self.start_loop()
         if len(sys.argv) == 2:
             # mode with one hardcoded bluetooth mac adress; one argument should be passed
-            pointer = "B8:AE:6E:1B:5B:03"
+            pointer = "B8:AE:6E:55:B5:0F"
             self.wm_pointer = wiimote.connect(pointer, name_pointer)
             self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
 
@@ -470,7 +522,23 @@ class WiimoteGame(QtWidgets.QWidget):
             # allows drawing when the A button on the wiimote is pressed
 
             if self.wm_pointer.buttons['A']:
+
+                pygame.draw.line(self.game_canvas, (255, 0, 0), [100, 100], [500, 500], 10)
+
                 self.game_mode = "draw"
+                cursor_pos = pygame.mouse.get_pos()
+                print(cursor_pos)
+                if not self.drawing_x_values[:-1] == cursor_pos[0] and not self.drawing_y_values[:-1] == cursor_pos[1]:
+                    self.drawing_x_values.append(cursor_pos[0])
+                    self.drawing_y_values.append(cursor_pos[1])
+
+                if self.currently_drawing == True:
+                    print("Still Drawing")
+                else:
+                    print("Drawing Started")
+
+                self.currently_drawing = True
+                return
                 # todo: draw a shield on the screen --> limit size and duration of appearance
             elif self.wm_pointer.buttons['Home']:
                 print("tesit")
@@ -508,6 +576,14 @@ class WiimoteGame(QtWidgets.QWidget):
                         x = pygame.mouse.get_pos()[0]
                         y = pygame.mouse.get_pos()[1]
                         self.player_shoot(x,y)
+
+            if len(self.drawing_x_values) > 0:
+                print("Drawing finished!")
+                print(self.drawing_x_values)
+                print(self.drawing_y_values)
+                self.currently_drawing = False
+                self.drawing_x_values = []
+                self.drawing_y_values =[]
 
     # Check if a button press on the wiimote has happened within the last 0.1 seconds
     # This prevents a sound from being played twice if a user presses a button too long.
@@ -552,6 +628,7 @@ class WiimoteGame(QtWidgets.QWidget):
                 self.player.reset()
                 if (self.lives > 0):
                     self.lives -= 1
+                    self.play_sound("ouch")
                 else:
                     if self.restarted == True:
                         self.game_over = False
@@ -568,7 +645,7 @@ class WiimoteGame(QtWidgets.QWidget):
         if self.level_seconds_counter > Constants.DURATION_BETWEEN_ENEMIES:
             self.level_seconds_counter = 0
             self.level += 1
-            enemy = Enemy(1, position_arr_x[randint(0, 1)], position_arr_y[randint(0,1)], 1)
+            enemy = Enemy(1, position_arr_x[randint(0, 1)], position_arr_y[randint(0,1)], 1, randint(1,5))
             self.enemies.add(enemy)
         else:
             self.level_seconds_counter +=1
@@ -607,9 +684,12 @@ class WiimoteGame(QtWidgets.QWidget):
 
             # updates info line on top and munition line on bottom of the game canvas
             self.drawInfoLine(
-                "Lives: " + str(self.lives) + "/5 Gesture: " + self.predicted_activity + " Highscore: " + str(
+                "Lives: " + str(self.lives) + " Highscore: " + str(
                     self.highscore))
             self.drawMunitionLine(str(self.munition_counter) + "/20")
+
+            self.draw_user_drawing()
+
             pygame.display.update(self.munition_line.get_rect())
             pygame.display.update(self.info_line_top.get_rect())
 
@@ -624,12 +704,19 @@ class WiimoteGame(QtWidgets.QWidget):
             self.switch_draw_shoot_mode()
 
             font = pygame.font.Font(None, 36)
-            self.text = font.render("GAME OVER", 1, (10, 10, 10))
+            self.text = font.render("GAME OVER - Press Home to restart", 1, (10, 10, 10))
             textpos = self.text.get_rect()
             self.screen.blit(self.text, (250, 250))
 
             pygame.display.flip()
             self.init_pygame_events()
+
+
+    def draw_user_drawing(self):
+        if len(self.drawing_x_values) > 0:
+            #pygame.draw.polygon(self.screen, (255,0,0), [[100, 100], [100, 400],[400, 300]], 2)
+            for i in range(len(self.drawing_x_values) - 1):
+                pygame.draw.line(self.screen, (255,0,0), [self.drawing_x_values[i], self.drawing_y_values[i]], [self.drawing_x_values[i+1], self.drawing_y_values[i+1]], 10)
 
 
 
@@ -901,7 +988,8 @@ class Tracking:
         # The coordinates of the head center are for the resolution of the Wiimote IR Cam (1024x768). To position the player correctly on the screen, new coordinates need to be calculated, suited for the resolution of the screen.
         x_on_screen = int((center[0] / Constants.WIIMOTE_IR_CAM_WIDTH) * self.WIDTH)
         y_on_screen = int((center[1] / Constants.WIIMOTE_IR_CAM_HEIGHT) * self.HEIGHT)
-
+        # Temp: Invert x
+        x_on_screen = self.WIDTH - x_on_screen
         print("X on screen: ", x_on_screen)
         print("Y on screen: ", y_on_screen)
         return x_on_screen, y_on_screen
