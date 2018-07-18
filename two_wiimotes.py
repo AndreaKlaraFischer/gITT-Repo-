@@ -6,6 +6,7 @@ import pygame
 import wiimote
 import math
 import time
+import csv
 from random import randint
 from PyQt5 import QtWidgets, QtCore, QtGui
 import numpy as np
@@ -241,15 +242,18 @@ class WiimoteGame(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
 
-        self.WIIMOTE_IR_CAM_WIDTH = 1024
-        self.WIIMOTE_IR_CAM_HEIGHT = 768
-        self.WIIMOTE_IR_CAM_CENTER = (self.WIIMOTE_IR_CAM_WIDTH/2, self.WIIMOTE_IR_CAM_HEIGHT/2)
+        #self.WIIMOTE_IR_CAM_WIDTH = 1024
+        #self.WIIMOTE_IR_CAM_HEIGHT = 768
+        #self.WIIMOTE_IR_CAM_CENTER = (self.WIIMOTE_IR_CAM_WIDTH/2, self.WIIMOTE_IR_CAM_HEIGHT/2)
 
-        self.ready_for_prediction = False
-        self.category_list = []
-        self.c = svm.SVC()
-        self.prediction_values = [[], [], []]
-        self.minlen = 1000  # Just a large value to begin with
+        self.gesture_recognizer = GestureRecognizer()
+        self.activity_recognizer = ActivityRecognizer()
+
+        #self.ready_for_prediction = False
+        # self.category_list = []
+        #self.c = svm.SVC()
+        #self.prediction_values = [[], [], []]
+        #self.minlen = 1000  # Just a large value to begin with
 
         self.pointer_x_values = []
         self.pointer_y_values = []
@@ -262,7 +266,7 @@ class WiimoteGame(QtWidgets.QWidget):
 
         self.last_button_press = time.time()
 
-        self.read_data_from_csv()
+        #self.read_data_from_csv()
 
         self.init_pygame()
         self.input_device = "wiimote"
@@ -491,7 +495,7 @@ class WiimoteGame(QtWidgets.QWidget):
         # todo: check later if all of these are still used
         self.game_mode = "shoot"
         # self.prediction_values = [[], [], []]
-        self.last_prediction = "Waiting for data..."
+        #self.last_prediction = "Waiting for data..."
         self.predicted_activity = "-"
         # self.category_list = []
         self.munition_counter = 20
@@ -501,7 +505,7 @@ class WiimoteGame(QtWidgets.QWidget):
         self.restarted = False
         self.level = 1
         self.level_seconds_counter = 0
-        self.reload_delay = 5
+        #self.reload_delay = 5
 
         self.hit_enemy = None
         self.new_training_values = [[], [], []]
@@ -523,25 +527,29 @@ class WiimoteGame(QtWidgets.QWidget):
 
             if self.wm_pointer.buttons['A']:
 
-                pygame.draw.line(self.game_canvas, (255, 0, 0), [100, 100], [500, 500], 10)
-
                 self.game_mode = "draw"
                 cursor_pos = pygame.mouse.get_pos()
-                print(cursor_pos)
-                if not self.drawing_x_values[:-1] == cursor_pos[0] and not self.drawing_y_values[:-1] == cursor_pos[1]:
+
+                if len(self.drawing_x_values) == 0:
                     self.drawing_x_values.append(cursor_pos[0])
                     self.drawing_y_values.append(cursor_pos[1])
+                else:
+                    if not self.drawing_x_values[-1] == cursor_pos[0] and not self.drawing_y_values[-1] == cursor_pos[-1]:
+                        self.drawing_x_values.append(cursor_pos[0])
+                        self.drawing_y_values.append(cursor_pos[1])
 
+                """
                 if self.currently_drawing == True:
                     print("Still Drawing")
                 else:
                     print("Drawing Started")
+                """
 
                 self.currently_drawing = True
+
                 return
-                # todo: draw a shield on the screen --> limit size and duration of appearance
+
             elif self.wm_pointer.buttons['Home']:
-                print("tesit")
                 self.munition_counter = 20
                 self.lives = 5
                 self.shot_enemy = False
@@ -579,11 +587,63 @@ class WiimoteGame(QtWidgets.QWidget):
 
             if len(self.drawing_x_values) > 0:
                 print("Drawing finished!")
-                print(self.drawing_x_values)
-                print(self.drawing_y_values)
+                #print(self.drawing_x_values)
+                #print(self.drawing_y_values)
+                self.gesture_recognizer.recognize_drawing(self.drawing_x_values, self.drawing_y_values)
+
+                self.calculate_barricade()
+
                 self.currently_drawing = False
                 self.drawing_x_values = []
                 self.drawing_y_values =[]
+
+
+    def calculate_barricade(self):
+        if len(self.drawing_x_values) == 0:
+            return
+
+        start_x = self.drawing_x_values[0]
+        start_y = self.drawing_y_values[0]
+        min_x = min(self.drawing_x_values)
+        max_x = max(self.drawing_x_values)
+
+        min_y = min(self.drawing_y_values)
+        max_y = max(self.drawing_y_values)
+
+        width = max_x - min_x
+        height = max_y - min_y
+
+        # Side length is the smaller one of width and height, since we want a square
+        # side_length = min(width, height)
+        #print(side_length)
+
+        barricade_x = start_x
+        barricade_y = start_y
+
+        # If the square has not been drawn starting from the top-left corner, we roughly calculate the pos of the top left corner_
+        if abs(start_x-min_x) > abs(start_x-max_x):
+            barricade_x = min_x
+        if abs(start_y-min_y) > abs(start_y-max_y):
+            barricade_y = min_y
+
+        """ 
+        self.circle_img = pygame.image.load(path.join(img_dir, str(randint)+".png")).convert()
+        self.image = self.circle_img
+        # scales down image
+        self.image = pygame.transform.scale(self.circle_img, (50, 50))
+        # avoids a black background
+        self.image.set_colorkey((250, 250, 250))
+
+        # specifies position of enemy
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.enemy_iterator = 0    
+        """
+
+        pygame.draw.rect(self.screen,(139,69,19),(barricade_x, barricade_y, width, height))
+
+
 
     # Check if a button press on the wiimote has happened within the last 0.1 seconds
     # This prevents a sound from being played twice if a user presses a button too long.
@@ -676,6 +736,11 @@ class WiimoteGame(QtWidgets.QWidget):
             # update the screen and draw all sprites on new positions
             self.screen.fill((100, 100, 100))
             self.enemies.draw(self.screen)
+
+            self.draw_user_drawing()
+            self.calculate_barricade()
+
+
             self.all_sprites.draw(self.screen)
 
             # recognize gesture
@@ -687,8 +752,6 @@ class WiimoteGame(QtWidgets.QWidget):
                 "Lives: " + str(self.lives) + " Highscore: " + str(
                     self.highscore))
             self.drawMunitionLine(str(self.munition_counter) + "/20")
-
-            self.draw_user_drawing()
 
             pygame.display.update(self.munition_line.get_rect())
             pygame.display.update(self.info_line_top.get_rect())
@@ -714,17 +777,8 @@ class WiimoteGame(QtWidgets.QWidget):
 
     def draw_user_drawing(self):
         if len(self.drawing_x_values) > 0:
-            #pygame.draw.polygon(self.screen, (255,0,0), [[100, 100], [100, 400],[400, 300]], 2)
             for i in range(len(self.drawing_x_values) - 1):
                 pygame.draw.line(self.screen, (255,0,0), [self.drawing_x_values[i], self.drawing_y_values[i]], [self.drawing_x_values[i+1], self.drawing_y_values[i+1]], 10)
-
-
-
-    def get_rotation(self):
-        if self.wm.accelerometer[1] < 450:
-            return True
-
-
 
     # draws an explosion animation, if the player has just shot an enemy
     def draw_explosion(self):
@@ -771,35 +825,42 @@ class WiimoteGame(QtWidgets.QWidget):
         x_acc = accelerometer[0]
         y_acc = accelerometer[1]
         z_acc = accelerometer[2]
-        #print(x_acc,y_acc,z_acc)
 
-        # todo: if available, recognizing should be started, and if not add training data with gesture name
-        # checks for available training data.
-        # self.read_data_from_csv()
-        self.predicted_activity = self.predict_activity(x_acc, y_acc, z_acc)
+        self.predicted_activity = self.activity_recognizer.predict_activity(x_acc, y_acc, z_acc)
 
-
-        if self.predicted_activity == "reload" and self.get_rotation() == True:
+        #if self.predicted_activity == "reload" and self.get_rotation() == True:
+        if self.predicted_activity == "reload":
             if self.munition_counter == 0:
-                if self.reload_delay >= 5:
+                self.play_sound("reload")
+                self.munition_counter = 20
 
-                    self.play_sound("reload")
-                    self.reload_delay = 0
-                    self.munition_counter = 20
-                else:
-                    self.reload_delay += 1
+"""
+    def get_rotation(self):
+        # Check if Wiimote pointing upwards
+        if self.wm.accelerometer[1] < 450:
+            return True
+"""
+
+class ActivityRecognizer:
+
+    def __init__(self):
+        print("Init Activity Recognizer")
+        self.category_list = []
+        self.ready_for_prediction = False
+        self.c = svm.SVC()
+        self.prediction_values = [[], [], []]
+        self.minlen = 1000  # Just a large value to begin with
+
+        self.read_data_from_csv()
 
     def get_categories(self):
-        csv_files = glob.glob("*.csv")  # get all csv files from the directory
+        csv_files = glob.glob(path.join("activity_templates", "*.csv"))  # get all csv files from the directory
         for file in csv_files:
             # split file at _ character, so that only the name without id is returned
-            categoryArr = file.split("_")
-            # check if csv file is valid, i.e. contains a _
-            if len(categoryArr) == 2:
-                # if gesture is not already in the list that should represent the items in the dropdown menu,
-                # add gesture to dropdown list
-                if categoryArr[0] not in self.category_list:
-                    self.category_list.append(categoryArr[0])
+            category = file.split("/")[1]
+            category = category.split("_")[0]
+            if category not in self.category_list:
+                self.category_list.append(category)
         return self.category_list
 
 
@@ -817,13 +878,14 @@ class WiimoteGame(QtWidgets.QWidget):
         for category in categories:
             activities[category] = []
 
-        csv_files = glob.glob("*.csv")
+        csv_files = glob.glob(path.join("activity_templates", "*.csv"))
         if len(csv_files) == 0:
             print("No CSV Files to train with!")
             return
 
         for csv_file in csv_files:
-            category_name = csv_file.split("_")[0]
+            category_name = csv_file.split("/")[1]
+            category_name = category_name.split("_")[0]
             for activity_name, value in activities.items():
                 if activity_name == category_name:
                     activities[activity_name].append([])
@@ -867,8 +929,8 @@ class WiimoteGame(QtWidgets.QWidget):
                 training_data.append(value[i])
 
         self.c.fit(training_data, categories)
-        print("Training finished!")
         self.ready_for_prediction = True
+        print("Training finished!")
 
     def predict_activity(self, x, y, z):
 
@@ -877,10 +939,9 @@ class WiimoteGame(QtWidgets.QWidget):
                 self.prediction_values[0].append(x)
                 self.prediction_values[1].append(y)
                 self.prediction_values[2].append(z)
-                return self.last_prediction
+                #return self.last_prediction
+                return ""
             else:
-
-
                 avg = []
                 for i in range(len(self.prediction_values[0])):
                     avg.append((self.prediction_values[0][i] + self.prediction_values[1][i] +
@@ -890,8 +951,272 @@ class WiimoteGame(QtWidgets.QWidget):
 
                 # This line is taken from the "Wiimote - FFT - SVM" notebook from Grips
                 freq = [np.abs(fft(avg) / len(avg))[1:len(avg) // 2]]
-                self.last_prediction = str(self.c.predict(freq)[0])
-                return self.last_prediction
+                #self.last_prediction = str(self.c.predict(freq)[0])
+                #return self.last_prediction
+                print(str(self.c.predict(freq)[0]))
+                return str(self.c.predict(freq)[0])
+
+
+
+
+
+"""
+This class implements the $1 gesture recognizer from the paper: Wobbrock, J.O., Wilson, A.D. and Li, Y. (2007).
+Gestures without libraries, toolkits or training: A $1 recognizer for user interface prototypes.
+"""
+
+class GestureRecognizer:
+
+    def __init__(self):
+        self.N = 64  # num of points after resampling
+        self.SIZE = 100  # Size of bounding box
+        # Code taken from https://stackoverflow.com/questions/25212181/is-the-golden-ratio-defined-in-python
+        self.PHI = (1 + 5 ** 0.5) / 2
+        # Treshold according to the paper is 2° (p.5)
+        self.TRESHOLD = 2
+
+        self.templates = []
+        self.template_names = []
+        self.load_templates()
+
+
+    def recognize_drawing(self, drawing_x_coordinates, drawing_y_coordinates):
+
+        if len(drawing_x_coordinates) < 4:  # Skip recognition if not enough points are drawn (so no error shows)
+            return
+
+        points = []
+
+        for i in range(len(drawing_x_coordinates)):
+            points.append([drawing_x_coordinates[i], drawing_y_coordinates[i]])
+
+        resampled_points = self.resample(points, self.N)
+        rotated_points = self.rotate_to_zero(resampled_points)
+        scaled_points = self.scale_to_square(rotated_points, self.SIZE)
+        points_for_recognition = self.translate_to_origin(scaled_points)
+
+        recgonize = self.recognize(points_for_recognition, self.templates)
+
+        return "Test"
+
+    # get all templates that are stored as data values within csv files
+    def load_templates(self):
+        csv_files = glob.glob(path.join("drawing_templates", "*.csv"))  # get all csv files from the directory
+
+        for file in csv_files:
+            # split file at ".", so that only the name without ".csv" is returned
+            filename = file.split(".")[0]
+            self.template_names.append(filename)
+            template = []
+
+            with open(file) as csvfile:
+                readcsv = csv.reader(csvfile, delimiter=',')
+                for row in readcsv:
+                    # get content of csv and store it in template list
+                    template.append([float(row[0]), float(row[1])])
+            self.templates.append(template)
+
+    # Done according to the pseudo-code from the paper "Wobbrock, J.O., Wilson, A.D. and Li, Y. (2007).
+    # Gestures without libraries, toolkits or training: A $1 recognizer for user interface prototypes."
+    def resample(self, points, n):
+        increment = self.path_length(points) / (n-1)  # Increment I
+        D = 0
+
+        new_points = [points[0]]
+
+        i = 1
+        j = len(points)
+
+        # iterate over all points of a gesture
+        while i < j:
+            d = self.distance(points[i-1], points[i])
+
+            if (D + d) >= increment:
+                qx = points[i-1][0] + ((increment - D) / d) * (points[i][0] - points[i-1][0])
+                qy = points[i-1][1] + ((increment - D) / d) * (points[i][1] - points[i-1][1])
+
+                new_points.append([qx, qy])
+                # Insert into list: https://www.tutorialspoint.com/python/list_insert.htm
+                points.insert(i, [qx, qy])
+                D = 0
+            else:
+                D += d
+
+            j = len(points)
+            i += 1
+        # This part is implemented like here: https://depts.washington.edu/madlab/proj/dollar/dollar.js
+        # handle issue, if there are less points than n
+        if len(new_points) == (n - 1):
+            new_points.append([points[len(points) - 1][0], points[len(points) - 1][1]])
+
+        return new_points
+
+    # According to the paper: Find the gestures indicative angle (the angle formed between the centroid
+    # of the gesture and the gestures first point). Then rotate the gesture so the angle is at 0°
+    def rotate_to_zero(self, points):
+        c = self.centroid(points)
+        # Atan2 is needed (see: https://depts.washington.edu/madlab/proj/dollar/dollar.js)
+        theta = math.atan2(c[1] - points[0][1], c[0] - points[0][0])
+        new_points = self.rotate_by(points, math.radians(-theta))
+        return new_points
+
+    def rotate_by(self, points, angle):
+        c = self.centroid(points)
+
+        new_points = []
+        cos = math.cos(angle)
+        sin = math.sin(angle)
+        # create list of rotated points
+        for point in points:
+            qx = (point[0] - c[0]) * cos - (point[1] - c[1]) * sin + c[0]
+            qy = (point[0] - c[0]) * sin - (point[1] - c[1]) * cos + c[0]
+            new_points.append([qx, qy])
+
+        return new_points
+
+    # scale down all points so that they fit in a bounding box with a fixed size
+    def scale_to_square(self, points, size):
+        B = self.bounding_box(points)
+
+        new_points = []
+
+        for point in points:
+            qx = point[0] * (size / B[0])
+            qy = point[1] * (size / B[1])
+            new_points.append([qx, qy])
+
+        return new_points
+
+    # moves points to the origin
+    def translate_to_origin(self, points):
+        c = self.centroid(points)
+
+        new_points = []
+
+        for point in points:
+            qx = point[0] - c[0]
+            qy = point[1] - c[1]
+            new_points.append([qx, qy])
+
+        return new_points
+
+    # predicts the entered gesture
+    def recognize(self, points, templates):
+
+        b = math.inf
+
+        self.best_find = self.template_names[0]
+        # iterate over all templates and check, which of them has the smallest distance to the entered gesture
+        for i in range(len(templates)):
+            d = self.distance_at_best_angle(points, templates[i], -math.radians(45), math.radians(45), 2)
+            print("Distance of " + self.template_names[i] + ": " + str(d))
+            if d < b:
+                b = d
+                self.best_find = self.template_names[i]
+
+        score = 1 - b / 0.5 * math.sqrt(self.SIZE**2 + self.SIZE**2)
+        print("Score: " + str(score))
+        print("Best find: " + self.best_find)
+        return [self.best_find, score]
+
+    # Function implemented like here: https://depts.washington.edu/madlab/proj/dollar/dollar.js
+    # get the minimal matching distance between a template and a gesture
+    def distance_at_best_angle(self, points, template, a, b, treshold):
+        x1 = self.PHI * a + (1 - self.PHI) * b
+
+        f1 = self.distance_at_angle(points, template, x1)
+        x2 = (1 - self.PHI) * a + self.PHI * b
+
+        f2 = self.distance_at_angle(points, template, x2)
+
+        while abs(b - a) > treshold:
+            if f1 < f2:
+                b = x2
+                x2 = x1
+                f2 = f1
+                x1 = self.PHI * a + (1 - self.PHI) * b
+                f1 = self.distance_at_angle(points, template, x1)
+            else:
+                a = x1
+                x1 = x2
+                f1 = f2
+                x2 = (1 - self.PHI) * a + self.PHI * b
+                f2 = self.distance_at_angle(points, template, x2)
+
+        return max(f1, f2)
+
+    # returns the distance of rotated points in comparison to a template
+    def distance_at_angle(self, points, template, angle):
+        new_points = self.rotate_by(points, angle)
+        return self.path_distance(new_points, template)
+
+    # calculates the path between two points
+    def path_distance(self, A, B):
+        d = 0
+        for i in range(len(A)):
+            d += self.distance(A[i], B[i])
+        return d / len(A)
+
+    # Function implemented like here: https://depts.washington.edu/madlab/proj/dollar/dollar.js
+    # calculates the bounding box
+    def bounding_box(self, points):
+
+        min_x = math.inf
+        max_x = -math.inf
+        min_y = math.inf
+        max_y = -math.inf
+
+        for point in points:
+            if point[0] < min_x:
+                min_x = point[0]
+            if point[0] > max_x:
+                max_x = point[0]
+
+            if point[1] < min_y:
+                min_y = point[1]
+            if point[1] > max_y:
+                max_y = point[1]
+
+        width = max_x - min_x
+        height = max_y - min_y
+        return [width, height]
+
+    # Function implemented like here: https://depts.washington.edu/madlab/proj/dollar/dollar.js
+    # returns the centroid values of a given set of points
+    def centroid(self, points):
+        x = 0
+        y = 0
+
+        for i in range(len(points)):
+            x = x + points[i][0]
+            y = y + points[i][1]
+
+        x = x / len(points)
+        y = y / len(points)
+
+        return [x, y]
+
+    # Done according to the pseudo-code from the paper "Wobbrock, J.O., Wilson, A.D. and Li, Y. (2007).
+    # Gestures without libraries, toolkits or training: A $1 recognizer for user interface prototypes."
+    # calculates the length of a path of points
+    def path_length(self, points):
+        d = 0
+
+        for i in range(1, len(points)):
+            d += self.distance(points[i-1], points[i])
+
+        print("Length: " + str(d))
+        return d
+
+    # Done with Pythagoras c = sqrt((xA-xB)² + (yA-yB)²)
+    # calculate the distance between two points
+    def distance(self, point_one, point_two):
+        return math.sqrt((point_two[0] - point_one[0])**2 + (point_two[1] - point_one[1])**2)
+
+
+
+
+
 
 
 """This class gets the coordinates of four LEDs as input params and calculates the coordinates of point the player is pointing at"""
@@ -997,10 +1322,7 @@ class Tracking:
 
 def main():
     app = QtWidgets.QApplication(sys.argv)
-
-
     wiimote_game = WiimoteGame()
-
     sys.exit(app.exec_())
 
 
