@@ -21,6 +21,7 @@ Sources:
     # Enemies: http://edmundmcmillen.tumblr.com/post/25278589277/click-the-image-to-view-it-at-full-rez-so-the
     # Heart: https://opengameart.org/content/heart-2 (CC0 1.0)
     # Bullet: https://opengameart.org/content/weapon-icons-1 by BrighamKeys(CC-BY-SA 3.0)
+    # Bullet hole: created by Vitus using a texture from https://opengameart.org/content/broken-glass created by Cookie (CC BY 3.0) 
     # Forest Background: https://opengameart.org/content/forest-background (CC0 1.0)
 
     Sounds:
@@ -49,12 +50,13 @@ class Constants:
 
     ENEMY_SIZE = 100
     BULLET_HOLE_SIZE = 50
-    BARRICADE_LIVETIME = 5  # Seconds
+    BARRICADE_LIFETIME = 5  # Seconds
     MUNITION_COUNT = 10
     MAX_NUM_LIVES = 2
     TIME_BETWEEN_SHOTS = 0.3
 
     DRAWING_COLOR = (251, 197, 49)  # Color for drawing the line of the barricade
+    GAME_OVER_SCREEN_COLOR = (100, 100, 100)
 
     SCREEN = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     WIDTH = pygame.display.get_surface().get_width()
@@ -88,11 +90,9 @@ class WiimoteGame:
         self.currently_drawing = False
         self.barricade = {}
 
-        self.bullet_holes = []
+        self.bullet_holes = [] # The locations of all bullet holes are saved here
 
-        self.loop_running = False
-
-        self.sounds = {}
+        self.sounds = {}  # A dictionnary containing all sound files
         self.input_device = "wiimote"
         self.last_button_press = time.time()
 
@@ -274,11 +274,9 @@ class WiimoteGame:
 
     # Starting the game loop
     def start_loop(self):
-
         self.reset_game()
-
-        self.loop_running = True
-        while self.loop_running:
+        loop_running = True
+        while loop_running:
             self.loop_iteration()
 
     def reset_game(self):
@@ -302,52 +300,61 @@ class WiimoteGame:
 
         self.init_sprites()
 
-    # One iteration of the loop
+    # One iteration of the loop: 1/60 sec
     def loop_iteration(self):
 
         self.clock.tick(60)
         self.check_wiimote_input()
 
         if self.game_over == False:
-            self.check_level()
+            self.update_game_logic()
+            self.draw_game_elements()
 
-            # updates the enemies and moves them
-            self.enemies.update()
-            self.all_sprites.update()
-
-            # enemy should follow the player
-            for enemy in self.enemies:
-                enemy.move_towards_player(self.player)
-
-            self.calculate_barricade()
-            self.check_enemy_behind()  # check for overlapping with enemy
-
-            Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_1, (0,0))
-            Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_2, (-(pygame.mouse.get_pos()[0] - Constants.WIDTH/2)/100 -50, -(pygame.mouse.get_pos()[1] - Constants.HEIGHT/2)/100))
-            Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_3, (-(pygame.mouse.get_pos()[0] - Constants.WIDTH/2)/50 - 50, -(pygame.mouse.get_pos()[1] - Constants.HEIGHT/2)/50))
-
-            self.enemies.draw(Constants.SCREEN)
-            self.draw_user_drawing()
-            self.draw_barricade()
-            self.draw_bullet_holes()
-            self.draw_explosion()  # draws explosion, if the player has shot an enemy
-
-            self.all_sprites.draw(Constants.SCREEN)
-
-            self.recognize_activity()  # recognize gesture
-
-            # updates info line on top and munition line on bottom of the game canvas
-            self.drawInfoLine("Highscore: " + str(self.highscore))
-            self.drawMunitionLine(self.munition_counter, self.lives)
-
+            self.recognize_activity()  # recognize gesture. Looks for reload of gun
+            self.drawInfoLine("Highscore: " + str(self.highscore)) # Update Highscore
+            self.drawMunitionLine(self.munition_counter, self.lives) # Update Lifes and Ammo
         else:
-            Constants.SCREEN.fill((100, 100, 100))
             self.display_game_over_screen()
 
         pygame.display.flip()
         self.init_pygame_events()
 
+    def update_game_logic(self):
+        self.check_level()
+
+        # updates the enemies and moves them
+        self.enemies.update()
+        self.all_sprites.update()
+
+        # enemy should follow the player
+        for enemy in self.enemies:
+            enemy.move_towards_player(self.player)
+
+        self.calculate_barricade()
+        self.check_enemy_behind()  # check for overlapping with enemy
+
+
+    def draw_game_elements(self):
+        self.draw_background_images()
+        self.enemies.draw(Constants.SCREEN)
+        self.draw_user_drawing()
+        self.draw_barricade()
+        self.draw_bullet_holes()
+        self.draw_explosion()  # draws explosion, if the player has shot an enemy
+        self.all_sprites.draw(Constants.SCREEN)
+
+
+    # Draws the background on the screen. It is composed of three images. Depending on the movement of the head, the two layers of the trees get moved accordingly, to create some sort of a small 3D effect.
+    def draw_background_images(self):
+        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_1, (0,0))
+        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_2, (-(pygame.mouse.get_pos()[0] - Constants.WIDTH/2)/100 -50,
+                                                                  -(pygame.mouse.get_pos()[1] - Constants.HEIGHT/2)/100))
+        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_3, (-(pygame.mouse.get_pos()[0] - Constants.WIDTH/2)/50 - 50,
+                                                                  -(pygame.mouse.get_pos()[1] - Constants.HEIGHT/2)/50))
+
     def display_game_over_screen(self):
+        Constants.SCREEN.fill(Constants.GAME_OVER_SCREEN_COLOR)
+
         font = pygame.font.Font(None, 100)
         game_over_message = font.render("GAME OVER!", 1, (255, 255, 255))
         Constants.SCREEN.blit(game_over_message, game_over_message.get_rect(center=(Constants.WIDTH/2, Constants.HEIGHT/4)))
@@ -370,7 +377,6 @@ class WiimoteGame:
     def check_wiimote_input(self):
         if self.wm_pointer.buttons['A']:
             self.on_wiimote_a_pressed()
-            return
         elif self.wm_pointer.buttons['B']:
             self.on_wiimote_b_pressed()
         elif self.wm_pointer.buttons['Home']:
@@ -384,8 +390,8 @@ class WiimoteGame:
         elif self.wm_pointer.buttons['Right']:
             self.on_wiimote_numpad_pressed('Right')
 
-        if len(self.drawing_x_values) > 0:
-            print("Drawing finished!")
+        # Check if user finished drawing on the screen
+        if not self.wm_pointer.buttons['A'] and len(self.drawing_x_values) > 0:
             self.gesture_recognizer.recognize_drawing(self.drawing_x_values, self.drawing_y_values)
             self.currently_drawing = False
             self.drawing_x_values = []
@@ -417,8 +423,10 @@ class WiimoteGame:
             self.player_shoot(pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1])
 
     def on_wiimote_home_pressed(self):
-        Highscore().update_highscore("AAA", self.highscore)
-        self.reset_game()
+        if self.new_click_ok(time.time()):
+            self.last_button_press = time.time()
+            Highscore().update_highscore("AAA", self.highscore)
+            self.reset_game()
 
     def on_wiimote_numpad_pressed(self, dir):
         print(dir)
@@ -466,7 +474,7 @@ class WiimoteGame:
 
     def draw_barricade(self):
         # Destroy barricade after a certain amount of time:
-        if "creation_time" in self.barricade and time.time() - self.barricade["creation_time"] > Constants.BARRICADE_LIVETIME:
+        if "creation_time" in self.barricade and time.time() - self.barricade["creation_time"] > Constants.BARRICADE_LIFETIME:
             self.barricade = {}
 
         if not self.currently_drawing and "barricade_x" in self.barricade.keys():
@@ -499,9 +507,8 @@ class WiimoteGame:
 
     def draw_bullet_holes(self):
         for i in range(len(self.bullet_holes)):
-            #pygame.draw.circle(Constants.SCREEN, (50, 50, 50), (self.bullet_holes[i][0], self.bullet_holes[i][1]), Constants.BULLET_HOLE_SIZE)
             Constants.SCREEN.blit(Constants.BULLET_HOLE_IMAGE, (self.bullet_holes[i][0] - Constants.BULLET_HOLE_SIZE/2, self.bullet_holes[i][1] - Constants.BULLET_HOLE_SIZE/2))
-        if len(self.bullet_holes) > 30:
+        if len(self.bullet_holes) > 30:  # If too many holes are on the screen, remove the oldest ones
             del self.bullet_holes[0]
 
     # checks if the player is overlapped by an enemy
@@ -532,7 +539,6 @@ class WiimoteGame:
             self.enemies.add(enemy)
         else:
             self.level_seconds_counter +=1
-
 
     def draw_user_drawing(self):
         if len(self.drawing_x_values) > 0:
@@ -569,7 +575,7 @@ class WiimoteGame:
                 elif event.key == pygame.K_RETURN:
                     self.munition_counter = Constants.MUNITION_COUNT
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                # check for collision with crosshairs and enemy
+                # check for collision with crosshair and enemys
                 x = pygame.mouse.get_pos()[0]
                 y = pygame.mouse.get_pos()[1]
                 self.player_shoot(x,y)
@@ -585,7 +591,7 @@ class WiimoteGame:
             self.play_sound("reload")
             self.munition_counter = Constants.MUNITION_COUNT
 
-
+"""This class is responsible for reading in highscore data from a csv file and writing new entries to that file"""
 class Highscore:
 
     def __init__(self):
@@ -610,11 +616,21 @@ class Highscore:
         self.highscore_entries.append([name, points])
         # Sort a list of lists: https://stackoverflow.com/questions/4174941/how-to-sort-a-list-of-lists-by-a-specific-index-of-the-inner-list
         self.highscore_entries.sort(key=lambda x: x[1])
+        # Reverse a list: https://stackoverflow.com/questions/3940128/how-can-i-reverse-a-list-in-python
+        self. highscore_entries = self.highscore_entries[::-1]
+        # Trim list to the top 10 entries
+        if len(self.highscore_entries) > 10:
+            self.highscore_entries = self.highscore_entries[:10]
+
         print(self.highscore_entries)
-        pass
+        self.update_csv_file()
 
     def update_csv_file(self):
-        pass
+        file = open("highscore.csv", "w")
+        writer = csv.writer(file)
+        for i in range(len(self.highscore_entries)):
+            writer.writerow([self.highscore_entries[i][0], self.highscore_entries[i][1]])
+        file.close()
 
 
 # from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
