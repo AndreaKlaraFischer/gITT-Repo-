@@ -18,12 +18,11 @@ from PyQt5.QtCore import QRect
     
     The blue point marks the middle point of the Head-Tracking-Glasses.
     We use that point for the player pos.
-    
-    Todo: Pause if Glasses not visible
-    Todo: Filter out "Jumps" of cursor
+
 
 """
 
+WIIMOTE_ADDRESS = "B8:AE:6E:55:B5:0F"
 
 class HeadTrackingSetup(QWidget):
 
@@ -47,7 +46,7 @@ class HeadTrackingSetup(QWidget):
         self.show()
 
     def connect_wiimote(self):
-        addr = "B8:AE:6E:55:B5:0F"
+        addr = WIIMOTE_ADDRESS
         name = None
         print(("Connecting to %s (%s)" % (name, addr)))
         wm = wiimote.connect(addr, name)

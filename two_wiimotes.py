@@ -18,15 +18,17 @@ Sources:
     Sprites:
     # crosshairs: https://opengameart.org/content/20-crosshairs-for-re
     # explosion: http://1.bp.blogspot.com/-h4gHvGnPfH0/UmFUg1riZlI/AAAAAAAAAFU/FGgUImTIGbU/s640/explosjon3.png
-    # circle (temporary): https://www.kisspng.com/png-circle-rainbow-free-content-clip-art-rainbow-borde-175522/download-png.html
     # Enemies: http://edmundmcmillen.tumblr.com/post/25278589277/click-the-image-to-view-it-at-full-rez-so-the
     # Heart: https://opengameart.org/content/heart-2 (CC0 1.0)
+    # Bullet: https://opengameart.org/content/weapon-icons-1 by BrighamKeys(CC-BY-SA 3.0)
 
     Sounds:
     # Sound "shot.wav": https://freesound.org/people/LeMudCrab/sounds/163455/ (CC0 1.0)
     # Sound "reload.wav": https://freesound.org/people/IchBinJager/sounds/272068/ by IchBinJager (CC BY 3.0)
+    # Sound "ouch.wav": 
 """
 
+"""For easy access to constants from all classes, they had been put into their own class"""
 class Constants:
     WIIMOTE_IR_CAM_WIDTH = 1024
     ENEMY_DELAY = 30
@@ -34,16 +36,23 @@ class Constants:
     WIIMOTE_IR_CAM_HEIGHT = 768
     CROSSHAIR_SIZE  = 100
     WIIMOTE_IR_CAM_CENTER = (WIIMOTE_IR_CAM_WIDTH/2, WIIMOTE_IR_CAM_HEIGHT/2)
-    MOVING_AVERAGE_NUM_VALUES = 5
+    MOVING_AVERAGE_NUM_VALUES = 5  # num of values that should be buffered for moving average filter
+
+    WIIMOTE_TRACKER_ADDRESS = "B8:AE:6E:55:B5:0F"
+    WIIMOTE_POINTER_ADDRESS = "B8:AE:6E:55:B5:0F"
 
     ENEMY_SIZE = 100
-    BARRICADE_LIVETIME = 5
+    BULLET_HOLE_SIZE = 10
+    BARRICADE_LIVETIME = 5  # Seconds
+    MUNITION_COUNT = 10
+    MAX_NUM_LIVES = 5
 
     # defines the directory where all images are located
     IMG_DIR = path.join(path.dirname(__file__), 'img')
+    GAME_BACKGROUND = None
 
 
-class WiimoteGame():
+class WiimoteGame:
 
     def __init__(self):
         super().__init__()
@@ -86,7 +95,7 @@ class WiimoteGame():
 
        self.drawInfoLine("Highscore: 0")
        self.drawGameCanvas()
-       self.drawMunitionLine(20, 5)
+       self.drawMunitionLine(Constants.MUNITION_COUNT, Constants.MAX_NUM_LIVES)
 
     def drawInfoLine(self, text):
         self.info_line_top = pygame.Surface((self.WIDTH, 50))
@@ -104,30 +113,20 @@ class WiimoteGame():
         self.screen.blit(self.game_canvas, (0, 50))
 
     def drawMunitionLine(self, num_bullets, lives):
-        # todo: replace numerical display later with munition forms, e.g. small rects
         self.munition_line = pygame.Surface((self.WIDTH, 50))
         self.munition_line.fill((250, 250, 250))
         self.screen.blit(self.munition_line, (0, self.HEIGHT - 50))
 
-        bullet = pygame.image.load(path.join(Constants.IMG_DIR, "cat.png"))
+        bullet = pygame.image.load(path.join(Constants.IMG_DIR, "bullet.png"))
         for i in range(num_bullets):
-            self.screen.blit(bullet, (self.WIDTH - i*50,self.HEIGHT - 50, 100, 100))
+            self.screen.blit(bullet, (self.WIDTH - i*20,self.HEIGHT - 50, 100, 100))
 
         heart = pygame.image.load(path.join(Constants.IMG_DIR, "heart.png"))
         for i in range(lives):
-            self.screen.blit(heart, (i*50, self.HEIGHT - 50, 100, 100))
+            self.screen.blit(heart, (i*50 + 10, self.HEIGHT - 40, 100, 100))
 
-
-
-        #font = pygame.font.Font(None, 36)
-        #self.munition_text = font.render(text, 1, (10, 10, 10))
-        #munition_text_rect = self.munition_text.get_rect()
-        #munition_text_rect.centerx = self.munition_line.get_rect().centerx
-        #self.munition_line.blit(self.munition_text, munition_text_rect)
-        #self.screen.blit(self.munition_line, (0, self.HEIGHT - 50))
-
+    # adds all sprites, i.e. game elements to the screen
     def init_sprites(self):
-        # adds all sprites, i.e. game elements to the screen
         self.all_sprites = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.players = pygame.sprite.Group()
@@ -147,13 +146,11 @@ class WiimoteGame():
         self.player = Player()
         self.players.add(self.player)
         self.all_sprites.add(self.player)
-        # draws all game elements
         self.enemies.draw(self.screen)
         self.all_sprites.draw(self.screen)
 
     def init_sounds(self):
         try:
-            # Init Sounds here (the soundfiles need to be in folder "sounds"
             self.sounds = {
                 "shot": pygame.mixer.Sound(path.join("sounds", "shot.wav")),
                 "reload": pygame.mixer.Sound(path.join("sounds", "reload.wav")),
@@ -172,76 +169,41 @@ class WiimoteGame():
     # Start the pairing process, like in wiimote_demo.py
     def connect_wiimotes(self):
 
-        name_tracker = None
-        name_pointer = None
+        tracker = Constants.WIIMOTE_TRACKER_ADDRESS
+        pointer = Constants.WIIMOTE_POINTER_ADDRESS
 
-        if len(sys.argv) == 1:
-            # mode with one hardcoded bluetooth mac adress; one argument should be passed
-            pointer = "B8:AE:6E:55:B5:0F"
-            self.wm_pointer = wiimote.connect(pointer, name_pointer)
-            self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
-
-            self.wm_pointer.leds = [1, 0, 0, 0]
-
-            self.wm = self.wm_pointer
-            self.input_device = "wiimote"
-            # As soon as the Wiimote is connected, start the loop
-            self.start_loop()
-
-            return
-
+        if len(sys.argv) == 4: # Developement mode for mouse
             self.input_device = "mouse"
             self.start_loop()
+            return
+
+        if len(sys.argv) == 2: # Developement mode for testing only the pointing; one argument should be passed
+            pointer = Constants.WIIMOTE_POINTER_ADDRESS
 
         if len(sys.argv) == 1:
-            # mode with hardcoded bluetooth mac adresses; no arguments should be passed
-            tracker = "B8:AE:6E:55:B5:0F"
-            pointer = "B8:AE:6E:F1:39:81"
-            self.wm_pointer = wiimote.connect(pointer, name_pointer)
-            self.wm_tracker = wiimote.connect(tracker, name_tracker)
+            # mode with hardcoded bluetooth mac adresses in Constants class; no arguments should be passed
+            #self.wm_tracker = wiimote.connect(tracker, None)
+            #self.wm_tracker.ir.register_callback(self.get_ir_data_of_tracker)
+            #self.wm_tracker.leds = [0, 1, 0, 0]
+            pass
 
-            self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
-            self.wm_tracker.ir.register_callback(self.get_ir_data_of_tracker)
-
-            self.wm_pointer.leds = [1, 0, 0, 0]
-            self.wm_tracker.leds = [0, 1, 0, 0]
-
-            self.wm = self.wm_pointer
-            self.input_device = "wiimote"
-            # As soon as the Wiimote is connected, start the loop
-            self.start_loop()
-        if len(sys.argv) == 2:
-            # mode with one hardcoded bluetooth mac adress; one argument should be passed
-            pointer = "B8:AE:6E:55:B5:0F"
-            self.wm_pointer = wiimote.connect(pointer, name_pointer)
-            self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
-
-            self.wm_pointer.leds = [1, 0, 0, 0]
-
-            self.wm = self.wm_pointer
-            self.input_device = "wiimote"
-            # As soon as the Wiimote is connected, start the loop
-            self.start_loop()
         # mode with bluetooth mac adresses on stdin, 2 adresses should be passed
         if len(sys.argv) == 3:
             tracker = sys.argv[1]
             pointer = sys.argv[2]
-            self.wm_tracker = wiimote.connect(tracker, name_tracker)
-            self.wm_pointer = wiimote.connect(pointer, name_pointer)
-
+            self.wm_tracker = wiimote.connect(tracker, None)
             self.wm_tracker.ir.register_callback(self.get_ir_data_of_tracker)
-            self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
-            self.wm_pointer.leds = [1, 0, 0, 0]
             self.wm_tracker.leds = [0, 1, 0, 0]
 
-            self.wm = self.wm_pointer
-            self.input_device = "wiimote"
-            # As soon as the Wiimote is connected, start the loop
-            self.start_loop()
-        # mode with mouse for testing purposes
-        elif len(sys.argv) == 4:
-            self.input_device = "mouse"
-            self.start_loop()
+        self.wm_pointer = wiimote.connect(pointer, None)
+        self.wm_pointer.ir.register_callback(self.get_ir_data_of_pointer)
+        self.wm_pointer.leds = [1, 0, 0, 0]
+
+        self.tracking = Tracking()
+        self.pointing = Pointing()
+
+        # As soon as the Wiimotes are connected, start the loop
+        self.start_loop()
 
     # Get the IR data from the "Pointer" Wiimote
     def get_ir_data_of_pointer(self, ir_data):
@@ -251,25 +213,24 @@ class WiimoteGame():
             led_three = (ir_data[2]["x"], ir_data[2]["y"])
             led_four = (ir_data[3]["x"], ir_data[3]["y"])
 
-            # Check if the Wiimote is outputting wrong values
+            # Check if the Wiimote is outputting wrong values (If IR is not working, x and y values will be 1023)
             if led_one[0] == 1023 and led_one[1] == 1023:
                 return
-
-            self.pointing = Pointing()
 
             # print(led_one, led_two, led_three, led_four)
             x, y = self.pointing.process_ir_data(led_one, led_two, led_three, led_four)
 
-            self.pointer_x_values.append(x)
+            self.pointer_x_values.append(x) #  Collect values in list
             self.pointer_y_values.append(y)
+
+            # Filter values using the moving average filter
             if len(self.pointer_x_values) == Constants.MOVING_AVERAGE_NUM_VALUES:
                 filtered_x, filtered_y = self.moving_average(self.pointer_x_values, self.pointer_y_values)
-                #print(self.pointer_x_values)
                 self.pointer_x_values = []
                 self.pointer_y_values = []
-                pygame.mouse.set_pos([filtered_x, filtered_y])
+                pygame.mouse.set_pos([filtered_x, filtered_y]) # Move the mouse
 
-    # Simple implementation
+    # Simple implementation of the moving average filter
     def moving_average(self, x_values, y_values):
         sum_of_x = 0
         sum_of_y = 0
@@ -288,10 +249,10 @@ class WiimoteGame():
             left = (ir_data[0]["x"], ir_data[0]["y"])
             right = (ir_data[1]["x"], ir_data[1]["y"])
 
+            # Check if the Wiimote is outputting wrong values. (If IR is not working, x and y values will be 1023)
             if left[0] == 1023 and left[1] == 1023:
                 return
 
-            self.tracking = Tracking()
             x_on_screen, y_on_screen = self.tracking.process_ir_data(left, right)
             # Pass the coordinates to the player.
             self.player.set_player_coordinates(x_on_screen, y_on_screen)
@@ -299,23 +260,75 @@ class WiimoteGame():
     # Starting the game loop
     def start_loop(self):
         # todo: check later if all of these are still used
-        self.munition_counter = 20
-        self.lives = 5
-        self.shot_enemy = False
+        self.munition_counter = Constants.MUNITION_COUNT
+        self.lives = Constants.MAX_NUM_LIVES
         self.highscore = 0
+        self.shot_enemy = False
         self.restarted = False
-        self.level = 1
         self.level_seconds_counter = 0
-
         self.hit_enemy = None
-        self.new_training_values = [[], [], []]
         self.shooted_enemy = None
         self.game_over = False
-
         self.shoot_enemy_anim_iterator = 0
+
         running = True
         while running:
             self.loop_iteration()
+
+    # One iteration of the loop
+    def loop_iteration(self):
+        if self.game_over == False:
+            self.restarted = False
+            self.clock.tick(60)
+            self.check_level()
+            self.switch_draw_shoot_mode()
+            # todo: add check for shields
+
+            # updates the enemies and moves them
+            self.enemies.update()
+            self.all_sprites.update()
+
+            # enemy should follow the player
+            for enemy in self.enemies:
+                enemy.move_towards_player(self.player)
+
+            self.check_enemy_behind()  # check for overlapping with enemy
+
+            self.draw_explosion()  # draws explosion, if the player has shot an enemy
+
+            self.screen.fill((100, 100, 100)) # update the screen and draw all sprites on new positions
+
+            self.draw_bullet_holes()
+            self.enemies.draw(self.screen)
+            self.draw_user_drawing()
+            self.calculate_barricade()
+            self.draw_barricade()
+
+            self.all_sprites.draw(self.screen)
+
+            self.recognize_activity()  # recognize gesture
+
+            # updates info line on top and munition line on bottom of the game canvas
+            self.drawInfoLine("Highscore: " + str(self.highscore))
+            self.drawMunitionLine(self.munition_counter, self.lives)
+
+            pygame.display.update(self.munition_line.get_rect())
+            pygame.display.update(self.info_line_top.get_rect())
+            pygame.display.flip()
+
+            self.init_pygame_events()
+
+        else:
+            self.clock.tick(60)
+            self.screen.fill((100, 100, 100))
+            self.switch_draw_shoot_mode()
+            font = pygame.font.Font(None, 36)
+            self.text = font.render("GAME OVER - Press Home to restart", 1, (10, 10, 10))
+            textpos = self.text.get_rect()
+            self.screen.blit(self.text, (250, 250))
+
+            pygame.display.flip()
+            self.init_pygame_events()
 
     def switch_draw_shoot_mode(self):
         if self.input_device == "wiimote":
@@ -345,18 +358,16 @@ class WiimoteGame():
                 return
 
             elif self.wm_pointer.buttons['Home']:
-                self.munition_counter = 20
-                self.lives = 5
+                self.munition_counter = Constants.MUNITION_COUNT
+                self.lives = Constants.MAX_NUM_LIVES
                 self.shot_enemy = False
                 self.highscore = 0
-                self.level = 1
+                #self.level = 1
                 self.level_seconds_counter = 0
                 self.reload_delay = 5
 
                 self.hit_enemy = None
-                self.new_training_values = [[], [], []]
                 self.shooted_enemy = None
-
                 self.shoot_enemy_anim_iterator = 0
 
                 self.game_over = False
@@ -378,14 +389,9 @@ class WiimoteGame():
                         y = pygame.mouse.get_pos()[1]
                         self.player_shoot(x,y)
 
-            # TEMP
             if len(self.drawing_x_values) > 0:
                 print("Drawing finished!")
-                #print(self.drawing_x_values)
-                #print(self.drawing_y_values)
                 self.gesture_recognizer.recognize_drawing(self.drawing_x_values, self.drawing_y_values)
-
-
                 self.currently_drawing = False
                 self.drawing_x_values = []
                 self.drawing_y_values =[]
@@ -398,7 +404,6 @@ class WiimoteGame():
         start_y = self.drawing_y_values[0]
         min_x = min(self.drawing_x_values)
         max_x = max(self.drawing_x_values)
-
         min_y = min(self.drawing_y_values)
         max_y = max(self.drawing_y_values)
 
@@ -454,7 +459,7 @@ class WiimoteGame():
 
     # if the player shoots an enemy
     def player_shoot(self, x, y):
-        if self.munition_counter > 0:
+        if self.munition_counter > 1:
             self.munition_counter -= 1
             self.play_sound("shot")
             self.bullet_holes.append([x, y])
@@ -471,7 +476,7 @@ class WiimoteGame():
 
     def draw_bullet_holes(self):
         for i in range(len(self.bullet_holes)):
-            pygame.draw.circle(self.screen, (50, 50, 50), (self.bullet_holes[i][0], self.bullet_holes[i][1]), 10)
+            pygame.draw.circle(self.screen, (50, 50, 50), (self.bullet_holes[i][0], self.bullet_holes[i][1]), Constants.BULLET_HOLE_SIZE)
         if len(self.bullet_holes) > 100:
             del self.bullet_holes[0]
 
@@ -501,73 +506,11 @@ class WiimoteGame():
         position_arr_y = [0, self.HEIGHT]
         if self.level_seconds_counter > Constants.DURATION_BETWEEN_ENEMIES:
             self.level_seconds_counter = 0
-            self.level += 1
+            #self.level += 1
             enemy = Enemy(1, position_arr_x[randint(0, 1)], position_arr_y[randint(0,1)], 1, randint(1,5))
             self.enemies.add(enemy)
         else:
             self.level_seconds_counter +=1
-
-    # One iteration of the loop
-    def loop_iteration(self):
-        if self.game_over == False:
-            self.restarted = False
-            self.clock.tick(60)
-            self.check_level()
-            self.switch_draw_shoot_mode()
-            # todo: add check for shields
-
-            # updates the enemies and moves them
-            self.enemies.update()
-            self.all_sprites.update()
-
-            # enemy should follow the player
-            for enemy in self.enemies:
-                enemy.move_towards_player(self.player)
-
-            # check for overlapping with enemy
-            self.check_enemy_behind()
-
-            # draws explosion, if the player has shot an enemy
-            self.draw_explosion()
-
-            # update the screen and draw all sprites on new positions
-            self.screen.fill((100, 100, 100))
-
-            self.draw_bullet_holes()
-
-            self.enemies.draw(self.screen)
-
-            self.draw_user_drawing()
-            self.calculate_barricade()
-            self.draw_barricade()
-
-            self.all_sprites.draw(self.screen)
-
-            # recognize gesture
-            if self.input_device == "wiimote":
-                    self.recognize_activity(self.wm_pointer.accelerometer)
-
-            # updates info line on top and munition line on bottom of the game canvas
-            self.drawInfoLine("Highscore: " + str(self.highscore))
-            self.drawMunitionLine(self.munition_counter, self.lives)
-
-            pygame.display.update(self.munition_line.get_rect())
-            pygame.display.update(self.info_line_top.get_rect())
-            pygame.display.flip()
-
-            self.init_pygame_events()
-
-        else:
-            self.clock.tick(60)
-            self.screen.fill((100, 100, 100))
-            self.switch_draw_shoot_mode()
-            font = pygame.font.Font(None, 36)
-            self.text = font.render("GAME OVER - Press Home to restart", 1, (10, 10, 10))
-            textpos = self.text.get_rect()
-            self.screen.blit(self.text, (250, 250))
-
-            pygame.display.flip()
-            self.init_pygame_events()
 
 
     def draw_user_drawing(self):
@@ -602,19 +545,22 @@ class WiimoteGame():
                     pygame.quit()
                     exit()
                 elif event.key == pygame.K_RETURN:
-                    self.munition_counter = 20
+                    self.munition_counter = Constants.MUNITION_COUNT
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 # check for collision with crosshairs and enemy
                 x = pygame.mouse.get_pos()[0]
                 y = pygame.mouse.get_pos()[1]
                 self.player_shoot(x,y)
 
-    def recognize_activity(self, accelerometer):
-        predicted_activity = self.activity_recognizer.predict_activity(accelerometer[0], accelerometer[1], accelerometer[2])
-        if predicted_activity == "reload":
-            if self.munition_counter == 0:
-                self.play_sound("reload")
-                self.munition_counter = 20
+    def recognize_activity(self):
+        if self.wm_pointer:
+            accelerometer = self.wm_pointer.accelerometer
+
+            predicted_activity = self.activity_recognizer.predict_activity(accelerometer[0], accelerometer[1], accelerometer[2])
+            if predicted_activity == "reload":
+                if self.munition_counter == 0:
+                    self.play_sound("reload")
+                    self.munition_counter = Constants.MUNITION_COUNT
 
 
 # from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
@@ -1239,7 +1185,10 @@ class Pointing:
         unit_to_dest = np.matrix([[l * A2[0], m * B2[0], t * C2[0]], [l * A2[1], m * B2[1], t * C2[1]],  [l, m, t]])
 
         # Step 4: Invert  A  to obtain  A−1
-        source_to_unit = np.linalg.inv(unit_to_source)
+        try:
+            source_to_unit = np.linalg.inv(unit_to_source)
+        except np.linalg.linalg.LinAlgError:
+            return 0,0
 
         # Step 5: Compute the combined matrix
         source_to_dest = unit_to_dest @ source_to_unit
