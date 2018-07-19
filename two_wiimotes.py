@@ -102,17 +102,10 @@ class WiimoteGame:
     def init_pygame(self):
         self.init_canvas()
         self.init_sprites()
-        # pygame.display.flip() # updates complete pygame display
         self.clock = pygame.time.Clock()
         self.init_sounds()
 
     def init_canvas(self):
-       #self.screen = pygame.display.set_mode((500, 500))
-       #self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-
-       #self.WIDTH = pygame.display.get_surface().get_width()
-       #self.HEIGHT = pygame.display.get_surface().get_height()
-
        self.drawInfoLine("Highscore: 0")
        self.drawGameCanvas()
        self.drawMunitionLine(Constants.MUNITION_COUNT, Constants.MAX_NUM_LIVES)
@@ -248,7 +241,9 @@ class WiimoteGame:
                 filtered_x, filtered_y = self.moving_average(self.pointer_x_values, self.pointer_y_values)
                 self.pointer_x_values = []
                 self.pointer_y_values = []
-                pygame.mouse.set_pos([filtered_x, filtered_y]) # Move the mouse
+                # Only update the cursor if it is on the screen
+                if filtered_x >= 0 and filtered_x <= Constants.WIDTH and filtered_y >= 0 and filtered_y <= Constants.HEIGHT:
+                    pygame.mouse.set_pos([filtered_x, filtered_y]) # Move the mouse
 
     # Simple implementation of the moving average filter
     def moving_average(self, x_values, y_values):
@@ -422,6 +417,7 @@ class WiimoteGame:
             self.player_shoot(pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1])
 
     def on_wiimote_home_pressed(self):
+        Highscore().update_highscore("AAA", self.highscore)
         self.reset_game()
 
     def on_wiimote_numpad_pressed(self, dir):
@@ -588,6 +584,37 @@ class WiimoteGame:
         if self.munition_counter == 0:
             self.play_sound("reload")
             self.munition_counter = Constants.MUNITION_COUNT
+
+
+class Highscore:
+
+    def __init__(self):
+        self.highscore_entries = []
+        self.read_data_from_csv()
+
+    def read_data_from_csv(self):
+        csv_files = glob.glob("*.csv")  # get all csv files from the directory
+        for file in csv_files:
+            print(file)
+            if file == "highscore.csv":
+                for line in open(file, "r").readlines():
+                    name, points = line.split(',')
+                    self.highscore_entries.append([name, int(points)])
+        print(self.highscore_entries)
+
+    def get_highscore(self):
+        return self.highscore_entries
+
+    def update_highscore(self, name, points):
+        print("Updating Highscore", name, points)
+        self.highscore_entries.append([name, points])
+        # Sort a list of lists: https://stackoverflow.com/questions/4174941/how-to-sort-a-list-of-lists-by-a-specific-index-of-the-inner-list
+        self.highscore_entries.sort(key=lambda x: x[1])
+        print(self.highscore_entries)
+        pass
+
+    def update_csv_file(self):
+        pass
 
 
 # from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
