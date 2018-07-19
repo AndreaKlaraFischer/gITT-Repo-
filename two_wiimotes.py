@@ -21,12 +21,15 @@ Sources:
     # Enemies: http://edmundmcmillen.tumblr.com/post/25278589277/click-the-image-to-view-it-at-full-rez-so-the
     # Heart: https://opengameart.org/content/heart-2 (CC0 1.0)
     # Bullet: https://opengameart.org/content/weapon-icons-1 by BrighamKeys(CC-BY-SA 3.0)
+    # Forest Background: https://opengameart.org/content/forest-background (CC0 1.0)
 
     Sounds:
     # Sound "shot.wav": https://freesound.org/people/LeMudCrab/sounds/163455/ (CC0 1.0)
     # Sound "reload.wav": https://freesound.org/people/IchBinJager/sounds/272068/ by IchBinJager (CC BY 3.0)
     # Sound "ouch.wav": 
 """
+
+pygame.init()
 
 """For easy access to constants from all classes, they had been put into their own class"""
 class Constants:
@@ -47,9 +50,17 @@ class Constants:
     MUNITION_COUNT = 10
     MAX_NUM_LIVES = 5
 
+    DRAWING_COLOR = (251, 197, 49)  # Color for drawing the line of the barricade
+
+    SCREEN = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    WIDTH = pygame.display.get_surface().get_width()
+    HEIGHT = pygame.display.get_surface().get_height()
+
     # defines the directory where all images are located
     IMG_DIR = path.join(path.dirname(__file__), 'img')
-    GAME_BACKGROUND = None
+    GAME_BACKGROUND_LAYER_1 = pygame.transform.scale(pygame.image.load(path.join(IMG_DIR, "parallax-forest-back-trees.png")), (WIDTH, HEIGHT)).convert()
+    GAME_BACKGROUND_LAYER_2 = pygame.transform.scale(pygame.image.load(path.join(IMG_DIR, "parallax-forest-middle-trees.png")), (WIDTH, HEIGHT)).convert_alpha()
+    GAME_BACKGROUND_LAYER_3 = pygame.transform.scale(pygame.image.load(path.join(IMG_DIR, "parallax-forest-front-trees.png")), (WIDTH, HEIGHT)).convert_alpha()
 
 
 class WiimoteGame:
@@ -78,7 +89,7 @@ class WiimoteGame:
         self.connect_wiimotes()
 
     def init_pygame(self):
-        pygame.init()
+        #pygame.init()
         self.init_canvas()
         self.init_sprites()
 
@@ -88,17 +99,17 @@ class WiimoteGame:
 
     def init_canvas(self):
        #self.screen = pygame.display.set_mode((500, 500))
-       self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+       #self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 
-       self.WIDTH = pygame.display.get_surface().get_width()
-       self.HEIGHT = pygame.display.get_surface().get_height()
+       #self.WIDTH = pygame.display.get_surface().get_width()
+       #self.HEIGHT = pygame.display.get_surface().get_height()
 
        self.drawInfoLine("Highscore: 0")
        self.drawGameCanvas()
        self.drawMunitionLine(Constants.MUNITION_COUNT, Constants.MAX_NUM_LIVES)
 
     def drawInfoLine(self, text):
-        self.info_line_top = pygame.Surface((self.WIDTH, 50))
+        self.info_line_top = pygame.Surface((Constants.WIDTH, 50))
         self.info_line_top = self.info_line_top.convert()
         self.info_line_top.fill((250, 250, 250))
         font = pygame.font.Font(None, 50)
@@ -106,24 +117,24 @@ class WiimoteGame:
         textpos = self.text.get_rect()
         textpos.centerx = self.info_line_top.get_rect().centerx
         self.info_line_top.blit(self.text, textpos)
-        self.screen.blit(self.info_line_top, (0, 0))
+        Constants.SCREEN.blit(self.info_line_top, (0, 0))
 
     def drawGameCanvas(self):
-        self.game_canvas = pygame.Surface((self.WIDTH, self.HEIGHT))
-        self.screen.blit(self.game_canvas, (0, 50))
+        self.game_canvas = pygame.Surface((Constants.WIDTH, Constants.HEIGHT))
+        Constants.SCREEN.blit(self.game_canvas, (0, 50))
 
     def drawMunitionLine(self, num_bullets, lives):
-        self.munition_line = pygame.Surface((self.WIDTH, 50))
+        self.munition_line = pygame.Surface((Constants.WIDTH, 50))
         self.munition_line.fill((250, 250, 250))
-        self.screen.blit(self.munition_line, (0, self.HEIGHT - 50))
+        Constants.SCREEN.blit(self.munition_line, (0, Constants.HEIGHT - 50))
 
         bullet = pygame.image.load(path.join(Constants.IMG_DIR, "bullet.png"))
         for i in range(num_bullets):
-            self.screen.blit(bullet, (self.WIDTH - i*20,self.HEIGHT - 50, 100, 100))
+            Constants.SCREEN.blit(bullet, (Constants.WIDTH - i*20 - 20, Constants.HEIGHT - 50, 100, 100))
 
         heart = pygame.image.load(path.join(Constants.IMG_DIR, "heart.png"))
         for i in range(lives):
-            self.screen.blit(heart, (i*50 + 10, self.HEIGHT - 40, 100, 100))
+            Constants.SCREEN.blit(heart, (i*50 + 10, Constants.HEIGHT - 40, 100, 100))
 
     # adds all sprites, i.e. game elements to the screen
     def init_sprites(self):
@@ -132,6 +143,7 @@ class WiimoteGame:
         self.players = pygame.sprite.Group()
         enemy = Enemy(1, 0, 0, 1,randint(1,5))
         self.enemies.add(enemy)
+
         #enemy = Enemy(2, self.WIDTH, 0, 1)
         #self.enemies.add(enemy)
 
@@ -146,8 +158,8 @@ class WiimoteGame:
         self.player = Player()
         self.players.add(self.player)
         self.all_sprites.add(self.player)
-        self.enemies.draw(self.screen)
-        self.all_sprites.draw(self.screen)
+        self.enemies.draw(Constants.SCREEN)
+        self.all_sprites.draw(Constants.SCREEN)
 
     def init_sounds(self):
         try:
@@ -259,7 +271,6 @@ class WiimoteGame:
 
     # Starting the game loop
     def start_loop(self):
-        # todo: check later if all of these are still used
         self.munition_counter = Constants.MUNITION_COUNT
         self.lives = Constants.MAX_NUM_LIVES
         self.highscore = 0
@@ -277,12 +288,14 @@ class WiimoteGame:
 
     # One iteration of the loop
     def loop_iteration(self):
+
+        self.clock.tick(60)
+        self.check_wiimote_input()
+
         if self.game_over == False:
             self.restarted = False
-            self.clock.tick(60)
+
             self.check_level()
-            self.switch_draw_shoot_mode()
-            # todo: add check for shields
 
             # updates the enemies and moves them
             self.enemies.update()
@@ -296,17 +309,23 @@ class WiimoteGame:
 
             self.draw_explosion()  # draws explosion, if the player has shot an enemy
 
-            self.screen.fill((100, 100, 100)) # update the screen and draw all sprites on new positions
+            # update the screen and draw all sprites on new positions
+            #Constants.SCREEN.fill((100, 100, 100))
+            Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_1, (0,0))
+            Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_2, (0,0))
+            Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_3, (0,0))
 
             self.draw_bullet_holes()
-            self.enemies.draw(self.screen)
+            self.enemies.draw(Constants.SCREEN)
             self.draw_user_drawing()
             self.calculate_barricade()
             self.draw_barricade()
 
-            self.all_sprites.draw(self.screen)
+            self.all_sprites.draw(Constants.SCREEN)
 
-            self.recognize_activity()  # recognize gesture
+            # CHeck only needed because of mouse mode
+            if self.wm_pointer:
+                self.recognize_activity()  # recognize gesture
 
             # updates info line on top and munition line on bottom of the game canvas
             self.drawInfoLine("Highscore: " + str(self.highscore))
@@ -314,87 +333,98 @@ class WiimoteGame:
 
             pygame.display.update(self.munition_line.get_rect())
             pygame.display.update(self.info_line_top.get_rect())
-            pygame.display.flip()
-
-            self.init_pygame_events()
-
         else:
-            self.clock.tick(60)
-            self.screen.fill((100, 100, 100))
-            self.switch_draw_shoot_mode()
-            font = pygame.font.Font(None, 36)
-            self.text = font.render("GAME OVER - Press Home to restart", 1, (10, 10, 10))
-            textpos = self.text.get_rect()
-            self.screen.blit(self.text, (250, 250))
+            Constants.SCREEN.fill((100, 100, 100))
+            self.display_game_over_message()
 
-            pygame.display.flip()
-            self.init_pygame_events()
+        pygame.display.flip()
+        self.init_pygame_events()
 
-    def switch_draw_shoot_mode(self):
-        if self.input_device == "wiimote":
-            # handles drawing mode and disables shooting while drawing
-            # allows drawing when the A button on the wiimote is pressed
+    def display_game_over_message(self):
+        font = pygame.font.Font(None, 50)
+        text = font.render("GAME OVER - Press 'Home' to restart", 1, (255, 255, 255))
+        Constants.SCREEN.blit(text, (Constants.WIDTH/2, Constants.HEIGHT/2))
 
-            if self.wm_pointer.buttons['A']:
-                cursor_pos = pygame.mouse.get_pos()
+    def check_wiimote_input(self):
+        if self.wm_pointer.buttons['A']:
+            self.on_wiimote_a_pressed()
+            return
+        elif self.wm_pointer.buttons['B']:
+            self.on_wiimote_b_pressed()
+        elif self.wm_pointer.buttons['Home']:
+            self.on_wiimote_home_pressed()
+        elif self.wm_pointer.buttons['Up']:
+            pass
+        elif self.wm_pointer.buttons['Down']:
+            pass
+        elif self.wm_pointer.buttons['Left']:
+            pass
+        elif self.wm_pointer.buttons['Right']:
+            pass
 
-                if len(self.drawing_x_values) == 0:
-                    self.drawing_x_values.append(cursor_pos[0])
-                    self.drawing_y_values.append(cursor_pos[1])
-                else:
-                    if not self.drawing_x_values[-1] == cursor_pos[0] and not self.drawing_y_values[-1] == cursor_pos[-1]:
-                        self.drawing_x_values.append(cursor_pos[0])
-                        self.drawing_y_values.append(cursor_pos[1])
+        if len(self.drawing_x_values) > 0:
+            print("Drawing finished!")
+            self.gesture_recognizer.recognize_drawing(self.drawing_x_values, self.drawing_y_values)
+            self.currently_drawing = False
+            self.drawing_x_values = []
+            self.drawing_y_values = []
 
 
-                if self.currently_drawing == True:
-                    print("Still Drawing")
-                else:
-                    print("Drawing Started")
-                    self.barricade = {}
+    def on_wiimote_a_pressed(self):
+        cursor_pos = pygame.mouse.get_pos()
 
-                self.currently_drawing = True
+        if len(self.drawing_x_values) == 0:
+            self.drawing_x_values.append(cursor_pos[0])
+            self.drawing_y_values.append(cursor_pos[1])
+        else:
+            if not self.drawing_x_values[-1] == cursor_pos[0] and not self.drawing_y_values[-1] == cursor_pos[-1]:
+                self.drawing_x_values.append(cursor_pos[0])
+                self.drawing_y_values.append(cursor_pos[1])
 
-                return
+        if self.currently_drawing == True:
+            print("Still Drawing")
+        else:
+            print("Drawing Started")
+            self.barricade = {}
 
-            elif self.wm_pointer.buttons['Home']:
-                self.munition_counter = Constants.MUNITION_COUNT
-                self.lives = Constants.MAX_NUM_LIVES
-                self.shot_enemy = False
-                self.highscore = 0
-                #self.level = 1
-                self.level_seconds_counter = 0
-                self.reload_delay = 5
+        self.currently_drawing = True
 
-                self.hit_enemy = None
-                self.shooted_enemy = None
-                self.shoot_enemy_anim_iterator = 0
+    def on_wiimote_b_pressed(self):
+        if self.new_click_ok(time.time()):
+            x = pygame.mouse.get_pos()[0]
+            y = pygame.mouse.get_pos()[1]
+            self.player_shoot(x, y)
 
-                self.game_over = False
-                self.restarted = True
-                for enemy in self.enemies:
-                    self.enemies.remove(enemy)
+    def on_wiimote_home_pressed(self):
+        # DELETE START
+        self.munition_counter = Constants.MUNITION_COUNT
+        self.lives = Constants.MAX_NUM_LIVES
+        self.shot_enemy = False
+        self.highscore = 0
+        # self.level = 1
+        self.level_seconds_counter = 0
+        self.reload_delay = 5
 
-                for sprite in self.all_sprites:
-                    self.all_sprites.remove(sprite)
-                self.screen.fill((100, 100, 100))
-                self.init_sprites()
-                pygame.display.flip()
-            else:
-                # disables drawing when shooted
-                # allows shooting when the B button on the wiimote is pressed
-                if self.wm_pointer.buttons['B']:
-                    if self.new_click_ok(time.time()):
-                        x = pygame.mouse.get_pos()[0]
-                        y = pygame.mouse.get_pos()[1]
-                        self.player_shoot(x,y)
+        self.hit_enemy = None
+        self.shooted_enemy = None
+        self.shoot_enemy_anim_iterator = 0
 
-            if len(self.drawing_x_values) > 0:
-                print("Drawing finished!")
-                self.gesture_recognizer.recognize_drawing(self.drawing_x_values, self.drawing_y_values)
-                self.currently_drawing = False
-                self.drawing_x_values = []
-                self.drawing_y_values =[]
+        self.game_over = False
+
+        # DELETE END
+
+        self.restarted = True
+        for enemy in self.enemies:
+            self.enemies.remove(enemy)
+
+        for sprite in self.all_sprites:
+            self.all_sprites.remove(sprite)
+        Constants.SCREEN.fill((100, 100, 100))
+        self.init_sprites()
+        pygame.display.flip()
+
+    def on_wiimote_numpad_pressed(self, dir):
+        pass
 
     def calculate_barricade(self):
         if len(self.drawing_x_values) == 0:
@@ -410,7 +440,7 @@ class WiimoteGame:
         width = max_x - min_x
         height = max_y - min_y
 
-        if width > self.WIDTH/3 or height > self.HEIGHT/3:
+        if width > Constants.WIDTH/3 or height > Constants.HEIGHT/3:
             print("Too big!")
             self.barricade =  {}
             self.display_hint("Too Big!")
@@ -436,7 +466,7 @@ class WiimoteGame:
     def display_hint(self, hint):
         font = pygame.font.Font(None, 50)
         self.text = font.render(hint, 1, (25, 42, 86))
-        self.screen.blit(self.text, (pygame.mouse.get_pos()[0] + 100, pygame.mouse.get_pos()[1]))
+        Constants.SCREEN.blit(self.text, (pygame.mouse.get_pos()[0] + 100, pygame.mouse.get_pos()[1]))
 
     def draw_barricade(self):
         # Destroy barricade after a certain amount of time:
@@ -444,8 +474,7 @@ class WiimoteGame:
             self.barricade = {}
 
         if not self.currently_drawing and "barricade_x" in self.barricade.keys():
-            pygame.draw.rect(self.screen,(139,69,19),(self.barricade["barricade_x"], self.barricade["barricade_y"], self.barricade["width"], self.barricade["height"]))
-
+            pygame.draw.rect(Constants.SCREEN,(139,69,19),(self.barricade["barricade_x"], self.barricade["barricade_y"], self.barricade["width"], self.barricade["height"]))
 
     # Check if a button press on the wiimote has happened within the last 0.1 seconds
     # This prevents a sound from being played twice if a user presses a button too long.
@@ -459,7 +488,7 @@ class WiimoteGame:
 
     # if the player shoots an enemy
     def player_shoot(self, x, y):
-        if self.munition_counter > 1:
+        if self.munition_counter > 0:
             self.munition_counter -= 1
             self.play_sound("shot")
             self.bullet_holes.append([x, y])
@@ -476,7 +505,7 @@ class WiimoteGame:
 
     def draw_bullet_holes(self):
         for i in range(len(self.bullet_holes)):
-            pygame.draw.circle(self.screen, (50, 50, 50), (self.bullet_holes[i][0], self.bullet_holes[i][1]), Constants.BULLET_HOLE_SIZE)
+            pygame.draw.circle(Constants.SCREEN, (50, 50, 50), (self.bullet_holes[i][0], self.bullet_holes[i][1]), Constants.BULLET_HOLE_SIZE)
         if len(self.bullet_holes) > 100:
             del self.bullet_holes[0]
 
@@ -486,6 +515,9 @@ class WiimoteGame:
             # is true as soon as the enemy waiting delay is over
             check_for_overlapping = enemy.get_collision()
             if (check_for_overlapping == True):
+
+                #TODO: CHECK HERE FOR BARRICADE
+
                 enemy.reset()
                 self.player.reset()
                 if (self.lives > 1):
@@ -494,19 +526,15 @@ class WiimoteGame:
                 else:
                     if self.restarted == True:
                         self.game_over = False
-
                     else:
                         self.game_over = True
-                    print("show highscore screen")
-                    # todo: implement highscore screen stuff and csv saving
 
-   # counts minutes and adds a new enemy after each minute
+   # counts seconds and adds a new enemy after a certain time
     def check_level(self):
-        position_arr_x = [0,self.WIDTH]
-        position_arr_y = [0, self.HEIGHT]
+        position_arr_x = [0, Constants.WIDTH]
+        position_arr_y = [0, Constants.HEIGHT]
         if self.level_seconds_counter > Constants.DURATION_BETWEEN_ENEMIES:
             self.level_seconds_counter = 0
-            #self.level += 1
             enemy = Enemy(1, position_arr_x[randint(0, 1)], position_arr_y[randint(0,1)], 1, randint(1,5))
             self.enemies.add(enemy)
         else:
@@ -516,7 +544,7 @@ class WiimoteGame:
     def draw_user_drawing(self):
         if len(self.drawing_x_values) > 0:
             for i in range(len(self.drawing_x_values) - 1):
-                pygame.draw.line(self.screen, (251, 197, 49), [self.drawing_x_values[i], self.drawing_y_values[i]], [self.drawing_x_values[i+1], self.drawing_y_values[i+1]], 10)
+                pygame.draw.line(Constants.SCREEN, Constants.DRAWING_COLOR, [self.drawing_x_values[i], self.drawing_y_values[i]], [self.drawing_x_values[i+1], self.drawing_y_values[i+1]], 10)
 
     # draws an explosion animation, if the player has just shot an enemy
     def draw_explosion(self):
@@ -533,13 +561,14 @@ class WiimoteGame:
                     self.shoot_enemy_anim_iterator = 0
                     self.shooted_enemy = None
 
-
+    # necessary for closing the window in pygame
     def init_pygame_events(self):
-        # necessary for closing the window in pygame
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 exit()
+
+            #TEMP - Only for Mouse
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     pygame.quit()
@@ -553,14 +582,16 @@ class WiimoteGame:
                 self.player_shoot(x,y)
 
     def recognize_activity(self):
-        if self.wm_pointer:
-            accelerometer = self.wm_pointer.accelerometer
+        accelerometer = self.wm_pointer.accelerometer
+        predicted_activity = self.activity_recognizer.predict_activity(accelerometer[0], accelerometer[1], accelerometer[2])
+        if predicted_activity == "reload":
+            self.reload()
 
-            predicted_activity = self.activity_recognizer.predict_activity(accelerometer[0], accelerometer[1], accelerometer[2])
-            if predicted_activity == "reload":
-                if self.munition_counter == 0:
-                    self.play_sound("reload")
-                    self.munition_counter = Constants.MUNITION_COUNT
+    def reload(self):
+        if self.munition_counter == 0:
+            self.play_sound("reload")
+            self.munition_counter = Constants.MUNITION_COUNT
+
 
 
 # from http://kidscancode.org/blog/2016/08/pygame_1-2_working-with-sprites/
@@ -679,16 +710,16 @@ class Enemy(pygame.sprite.Sprite):
 class Player(pygame.sprite.Sprite):
     def __init__(self):
         pygame.sprite.Sprite.__init__(self)
-        self.WIDTH = pygame.display.get_surface().get_width()
-        self.HEIGHT = pygame.display.get_surface().get_height()
+        #self.WIDTH = pygame.display.get_surface().get_width()
+        #self.HEIGHT = pygame.display.get_surface().get_height()
         self.image = pygame.Surface((100, 100))
         self.image.fill((0, 255, 0))
         self.rect = self.image.get_rect()
-        self.rect.centerx = self.WIDTH / 2
-        self.rect.bottom = self.HEIGHT - 200
+        self.rect.centerx = Constants.WIDTH / 2
+        self.rect.bottom = Constants.HEIGHT - 200
         self.speedx = 0
-        self.centerx = self.WIDTH /2
-        self.centery = self.HEIGHT/2
+        self.centerx = Constants.WIDTH /2
+        self.centery = Constants.HEIGHT/2
 
     def set_player_coordinates(self, x, y):
         self.centerx = x
@@ -717,17 +748,17 @@ class Player(pygame.sprite.Sprite):
         self.rect.y = self.centery
 
         # prevents the player to get outside of the screen
-        if self.rect.right > self.WIDTH:
+        if self.rect.right > Constants.WIDTH:
             # todo: set to pause mode
-            self.rect.right = self.WIDTH
+            self.rect.right = Constants.WIDTH
         if self.rect.left < 0:
             # todo: set to pause mode
             self.rect.left = 0
 
     # resets player to start position
     def reset(self):
-        self.rect.centerx = self.WIDTH / 2
-        self.rect.bottom = self.HEIGHT - 200
+        self.rect.centerx = Constants.WIDTH / 2
+        self.rect.bottom = Constants.HEIGHT - 200
 
 
 class Crosshairs(pygame.sprite.Sprite):
@@ -735,8 +766,8 @@ class Crosshairs(pygame.sprite.Sprite):
         pygame.sprite.Sprite.__init__(self)
         # set crosshair image
         self.crosshair_img = pygame.image.load(path.join(Constants.IMG_DIR, "circle-5.png")).convert()
-        self.WIDTH = pygame.display.get_surface().get_width()
-        self.HEIGHT = pygame.display.get_surface().get_height()
+        #self.WIDTH = pygame.display.get_surface().get_width()
+        #self.HEIGHT = pygame.display.get_surface().get_height()
         self.image = self.crosshair_img
         self.image = pygame.transform.scale(self.crosshair_img, (Constants.CROSSHAIR_SIZE, Constants.CROSSHAIR_SIZE))
         self.image.set_colorkey((0,0,0))
@@ -756,13 +787,11 @@ class Crosshairs(pygame.sprite.Sprite):
 class ActivityRecognizer:
 
     def __init__(self):
-        print("Init Activity Recognizer")
         self.category_list = []
         self.ready_for_prediction = False
         self.c = svm.SVC()
         self.prediction_values = [[], [], []]
         self.minlen = 1000  # Just a large value to begin with
-
         self.read_data_from_csv()
 
     def get_categories(self):
@@ -774,7 +803,6 @@ class ActivityRecognizer:
             if category not in self.category_list:
                 self.category_list.append(category)
         return self.category_list
-
 
     # Parts of the code taken from the "Wiimote - FFT - SVM" notebook from Grips
     def read_data_from_csv(self):
@@ -809,7 +837,6 @@ class ActivityRecognizer:
         self.cut_off_data(activities)
 
     def cut_off_data(self, activities):
-        #self.minlen = 10000000  # Large number to begin
         for activity_name, value in activities.items():
             for data in value:
                 num_measurements = len(data)
@@ -851,7 +878,6 @@ class ActivityRecognizer:
                 self.prediction_values[0].append(x)
                 self.prediction_values[1].append(y)
                 self.prediction_values[2].append(z)
-                #return self.last_prediction
                 return ""
             else:
                 avg = []
@@ -865,7 +891,6 @@ class ActivityRecognizer:
                 freq = [np.abs(fft(avg) / len(avg))[1:len(avg) // 2]]
                 #self.last_prediction = str(self.c.predict(freq)[0])
                 #return self.last_prediction
-                print(str(self.c.predict(freq)[0]))
                 return str(self.c.predict(freq)[0])
 
 
@@ -1212,8 +1237,8 @@ class Tracking:
     def process_ir_data(self, left, right):
 
         #Temp:
-        self.WIDTH = 1920
-        self.HEIGHT = 1080
+        #self.WIDTH = 1920
+        #self.HEIGHT = 1080
 
         # Since we want direct movement (e.g move head up -> move player on screen up), the coordinate points need to be inverted. Otherwise, movements will be in the wrong direction
         inverted_left = (Constants.WIIMOTE_IR_CAM_WIDTH - left[0], Constants.WIIMOTE_IR_CAM_HEIGHT - left[1])
@@ -1223,8 +1248,8 @@ class Tracking:
         center = ((inverted_left[0] + inverted_right[0]) / 2, (inverted_left[1] + inverted_right[1]) / 2)
 
         # The coordinates of the head center are for the resolution of the Wiimote IR Cam (1024x768). To position the player correctly on the screen, new coordinates need to be calculated, suited for the resolution of the screen.
-        x_on_screen = int((center[0] / Constants.WIIMOTE_IR_CAM_WIDTH) * self.WIDTH)
-        y_on_screen = int((center[1] / Constants.WIIMOTE_IR_CAM_HEIGHT) * self.HEIGHT)
+        x_on_screen = int((center[0] / Constants.WIIMOTE_IR_CAM_WIDTH) * Constants.WIDTH)
+        y_on_screen = int((center[1] / Constants.WIIMOTE_IR_CAM_HEIGHT) * Constants.HEIGHT)
         # Temp: Invert x
         x_on_screen = self.WIDTH - x_on_screen
         print("X on screen: ", x_on_screen)
