@@ -52,11 +52,14 @@ class Constants:
     BULLET_HOLE_SIZE = 50
     BARRICADE_LIFETIME = 5  # Seconds
     MUNITION_COUNT = 10
-    MAX_NUM_LIVES = 2
-    TIME_BETWEEN_SHOTS = 0.3
+    MAX_NUM_LIVES = 5
+    TIME_BETWEEN_SHOTS = 0.5
+    NAME_INPUT_SCROLL_SPEED = 0.1
 
     DRAWING_COLOR = (251, 197, 49)  # Color for drawing the line of the barricade
     GAME_OVER_SCREEN_COLOR = (100, 100, 100)
+    BARRICADE_COLOR = (251, 197, 49)
+    HINT_COLOR = (251, 197, 49)
 
     SCREEN = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     WIDTH = pygame.display.get_surface().get_width()
@@ -64,6 +67,8 @@ class Constants:
 
     MAX_BARRICADE_WIDTH = WIDTH/3
     MAX_BARRICADE_HEIGHT = HEIGHT/3
+
+    NAME_INPUT_LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "_"]
 
     # defines the directory where all images are located
     IMG_DIR = path.join(path.dirname(__file__), 'img')
@@ -91,6 +96,9 @@ class WiimoteGame:
         self.barricade = {}
 
         self.bullet_holes = [] # The locations of all bullet holes are saved here
+
+        self.player_name = ["A", "A", "A", "A", "A"]
+        self.name_input_pos = 0
 
         self.sounds = {}  # A dictionnary containing all sound files
         self.input_device = "wiimote"
@@ -311,7 +319,7 @@ class WiimoteGame:
             self.draw_game_elements()
 
             self.recognize_activity()  # recognize gesture. Looks for reload of gun
-            self.drawInfoLine("Highscore: " + str(self.highscore)) # Update Highscore
+            self.drawInfoLine("Score: " + str(self.highscore)) # Update displayed Score
             self.drawMunitionLine(self.munition_counter, self.lives) # Update Lifes and Ammo
         else:
             self.display_game_over_screen()
@@ -320,6 +328,8 @@ class WiimoteGame:
         self.init_pygame_events()
 
     def update_game_logic(self):
+        self.draw_background_images()
+
         self.check_level()
 
         # updates the enemies and moves them
@@ -335,7 +345,6 @@ class WiimoteGame:
 
 
     def draw_game_elements(self):
-        self.draw_background_images()
         self.enemies.draw(Constants.SCREEN)
         self.draw_user_drawing()
         self.draw_barricade()
@@ -354,25 +363,49 @@ class WiimoteGame:
 
     def display_game_over_screen(self):
         Constants.SCREEN.fill(Constants.GAME_OVER_SCREEN_COLOR)
+        self.draw_game_over_text()
+        self.draw_name_input()
+        self.draw_highscore()
 
+    def draw_game_over_text(self):
         font = pygame.font.Font(None, 100)
         game_over_message = font.render("GAME OVER!", 1, (255, 255, 255))
-        Constants.SCREEN.blit(game_over_message, game_over_message.get_rect(center=(Constants.WIDTH/2, Constants.HEIGHT/4)))
+        Constants.SCREEN.blit(game_over_message, game_over_message.get_rect(center=(Constants.WIDTH/2, 1/10 * Constants.HEIGHT)))
+
         font = pygame.font.Font(None, 36)
         highscore_message = font.render("Your Highscore is " + str(self.highscore), 1, (255, 255, 255))
-        Constants.SCREEN.blit(highscore_message, highscore_message.get_rect(center=(Constants.WIDTH/2, Constants.HEIGHT/3)))
-        restart_message = font.render("Press 'Home' to restart", 1, (255, 255, 255))
-        Constants.SCREEN.blit(restart_message, highscore_message.get_rect(center=(Constants.WIDTH/2, Constants.HEIGHT/3 + 50)))
-        save_message = font.render("Or press '+' to save your Highscore to the the Leaderboard", 1, (255, 255, 255), (100,100,100))
-        Constants.SCREEN.blit(save_message, save_message.get_rect(center=(Constants.WIDTH/2, Constants.HEIGHT/2)))
+        restart_message = font.render("Type in your name using the Wiimote D-Pad", 1, (255, 255, 255))
+        save_message = font.render("Press 'Home' to restart", 1, (255, 255, 255), (100,100,100))
+        Constants.SCREEN.blit(highscore_message, highscore_message.get_rect(center=(Constants.WIDTH/2, 2/10 * Constants.HEIGHT)))
+        Constants.SCREEN.blit(restart_message, restart_message.get_rect(center=(Constants.WIDTH/2, 3/10 * Constants.HEIGHT)))
+        Constants.SCREEN.blit(save_message, save_message.get_rect(center=(Constants.WIDTH/2, 4/10 * Constants.HEIGHT)))
 
+    def draw_name_input(self):
         font = pygame.font.Font(None, 200)
-        letter_one = font.render("A", 1, (255, 255, 255))
-        Constants.SCREEN.blit(letter_one, letter_one.get_rect(center=(Constants.WIDTH/2 - 200, Constants.HEIGHT/2 + 200)))
-        letter_two = font.render("A", 1, (255, 255, 255))
-        Constants.SCREEN.blit(letter_two, letter_two.get_rect(center=(Constants.WIDTH/2, Constants.HEIGHT/2 + 200)))
-        letter_three = font.render("A", 1, (255, 255, 255))
-        Constants.SCREEN.blit(letter_three, letter_three.get_rect(center=(Constants.WIDTH/2 + 200, Constants.HEIGHT/2 + 200)))
+
+        letter_font_objects = []
+
+        for i in range(len(self.player_name)):
+            if self.name_input_pos == i:
+                letter_font_objects.append(font.render(self.player_name[i], 1, (255, 0, 0)))
+            else:
+                letter_font_objects.append(font.render(self.player_name[i], 1, (255, 255, 255)))
+
+        Constants.SCREEN.blit(letter_font_objects[0], letter_font_objects[0].get_rect(center=(Constants.WIDTH/2 - 400, Constants.HEIGHT/2)))
+        Constants.SCREEN.blit(letter_font_objects[1], letter_font_objects[1].get_rect(center=(Constants.WIDTH/2 - 200, Constants.HEIGHT/2)))
+        Constants.SCREEN.blit(letter_font_objects[2], letter_font_objects[2].get_rect(center=(Constants.WIDTH/2, Constants.HEIGHT/2)))
+        Constants.SCREEN.blit(letter_font_objects[3], letter_font_objects[3].get_rect(center=(Constants.WIDTH/2 + 200, Constants.HEIGHT/2)))
+        Constants.SCREEN.blit(letter_font_objects[4], letter_font_objects[4].get_rect(center=(Constants.WIDTH/2 + 400, Constants.HEIGHT/2)))
+
+    def draw_highscore(self):
+        highscore = Highscore().get_highscore()
+
+        font = pygame.font.Font(None, 30)
+        highscore_title = font.render("SCORE" , 1, (255, 255, 255), (100, 100, 100))
+        Constants.SCREEN.blit(highscore_title, highscore_title.get_rect(center=(Constants.WIDTH/2, 7/10 * Constants.HEIGHT - 40)))
+        for i in range(len(highscore)):
+            highscore_entry = font.render(str(highscore[i][0]) + ": " + str(highscore[i][1]) , 1, (255, 255, 255), (100,100,100))
+            Constants.SCREEN.blit(highscore_entry, highscore_entry.get_rect(center=(Constants.WIDTH/2, 7/10 * Constants.HEIGHT + (i * 20))))
 
     def check_wiimote_input(self):
         if self.wm_pointer.buttons['A']:
@@ -382,13 +415,13 @@ class WiimoteGame:
         elif self.wm_pointer.buttons['Home']:
             self.on_wiimote_home_pressed()
         elif self.wm_pointer.buttons['Up']:
-            self.on_wiimote_numpad_pressed('Up')
+            self.on_wiimote_dpad_pressed('Up')
         elif self.wm_pointer.buttons['Down']:
-            self.on_wiimote_numpad_pressed('Down')
+            self.on_wiimote_dpad_pressed('Down')
         elif self.wm_pointer.buttons['Left']:
-            self.on_wiimote_numpad_pressed('Left')
+            self.on_wiimote_dpad_pressed('Left')
         elif self.wm_pointer.buttons['Right']:
-            self.on_wiimote_numpad_pressed('Right')
+            self.on_wiimote_dpad_pressed('Right')
 
         # Check if user finished drawing on the screen
         if not self.wm_pointer.buttons['A'] and len(self.drawing_x_values) > 0:
@@ -418,18 +451,49 @@ class WiimoteGame:
             self.currently_drawing = True
 
     def on_wiimote_b_pressed(self):
-        if not self.game_over and self.new_click_ok(time.time()):
+        if not self.game_over and self.new_click_ok(time.time(), Constants.TIME_BETWEEN_SHOTS):
             self.last_button_press = time.time()
             self.player_shoot(pygame.mouse.get_pos()[0], pygame.mouse.get_pos()[1])
 
     def on_wiimote_home_pressed(self):
-        if self.new_click_ok(time.time()):
+        if self.new_click_ok(time.time(), Constants.TIME_BETWEEN_SHOTS):
             self.last_button_press = time.time()
-            Highscore().update_highscore("AAA", self.highscore)
+            playername = ""
+            for i in range(len(self.player_name)):
+                char = self.player_name[i]
+                if char == "_":
+                    char = " "
+                playername += char
+
+            Highscore().update_highscore(playername, self.highscore)
             self.reset_game()
 
-    def on_wiimote_numpad_pressed(self, dir):
+    def on_wiimote_dpad_pressed(self, dir):
         print(dir)
+        if self.new_click_ok(time.time(), Constants.NAME_INPUT_SCROLL_SPEED):
+            self.last_button_press = time.time()
+            if dir == "Up":
+                index = Constants.NAME_INPUT_LETTERS.index(self.player_name[self.name_input_pos])
+                if (index + 1) > len(Constants.NAME_INPUT_LETTERS) - 1:
+                    self.player_name[self.name_input_pos] = Constants.NAME_INPUT_LETTERS[0]
+                else:
+                    self.player_name[self.name_input_pos] = Constants.NAME_INPUT_LETTERS[index + 1]
+            elif dir == "Down":
+                index = Constants.NAME_INPUT_LETTERS.index(self.player_name[self.name_input_pos])
+                if (index - 1) < 0:
+                    self.player_name[self.name_input_pos] = Constants.NAME_INPUT_LETTERS[len(Constants.NAME_INPUT_LETTERS)-1]
+                else:
+                    self.player_name[self.name_input_pos] = Constants.NAME_INPUT_LETTERS[index - 1]
+            elif dir == "Left":
+                if (self.name_input_pos - 1) < 0:
+                    self.name_input_pos = len(self.player_name) - 1
+                else:
+                    self.name_input_pos -= 1
+            elif dir == "Right":
+                if (self.name_input_pos + 1) > len(self.player_name) - 1:
+                    self.name_input_pos = 0
+                else:
+                    self.name_input_pos += 1
 
     def calculate_barricade(self):
         if len(self.drawing_x_values) == 0:
@@ -469,7 +533,7 @@ class WiimoteGame:
 
     def display_hint(self, hint):
         font = pygame.font.Font(None, 50)
-        self.text = font.render(hint, 1, (25, 42, 86))
+        self.text = font.render(hint, 1, Constants.HINT_COLOR)
         Constants.SCREEN.blit(self.text, (pygame.mouse.get_pos()[0] + 100, pygame.mouse.get_pos()[1]))
 
     def draw_barricade(self):
@@ -478,12 +542,12 @@ class WiimoteGame:
             self.barricade = {}
 
         if not self.currently_drawing and "barricade_x" in self.barricade.keys():
-            pygame.draw.rect(Constants.SCREEN,(139,69,19),(self.barricade["barricade_x"], self.barricade["barricade_y"], self.barricade["width"], self.barricade["height"]))
+            pygame.draw.rect(Constants.SCREEN,Constants.BARRICADE_COLOR,(self.barricade["barricade_x"], self.barricade["barricade_y"], self.barricade["width"], self.barricade["height"]))
 
     # Check if a button press on the wiimote has happened within the last 0.1 seconds
     # This prevents a sound from being played twice if a user presses a button too long.
-    def new_click_ok(self, current_time):
-        if current_time - self.last_button_press > Constants.TIME_BETWEEN_SHOTS:
+    def new_click_ok(self, current_time, time_to_last_click):
+        if current_time - self.last_button_press > time_to_last_click:
             return True
         else:
             return False
