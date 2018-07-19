@@ -46,7 +46,10 @@ class Constants:
     MOVING_AVERAGE_NUM_VALUES = 5  # num of values that should be buffered for moving average filter
 
     WIIMOTE_TRACKER_ADDRESS = "B8:AE:6E:55:B5:0F"
-    WIIMOTE_POINTER_ADDRESS = "B8:AE:6E:55:B5:0F"
+    WIIMOTE_POINTER_ADDRESS = "00:1e:a9:36:9b:34"
+
+    # The tracking of the head needs to be inverted if the tracking wiimote is behind and not in front of the player
+    INVERT_HEAD_TRACKING_LEFT_RIGHT = False
 
     ENEMY_SIZE = 100
     BULLET_HOLE_SIZE = 50
@@ -203,9 +206,9 @@ class WiimoteGame:
 
         if len(sys.argv) == 1:
             # mode with hardcoded bluetooth mac adresses in Constants class; no arguments should be passed
-            #self.wm_tracker = wiimote.connect(tracker, None)
-            #self.wm_tracker.ir.register_callback(self.get_ir_data_of_tracker)
-            #self.wm_tracker.leds = [0, 1, 0, 0]
+            self.wm_tracker = wiimote.connect(tracker, None)
+            self.wm_tracker.ir.register_callback(self.get_ir_data_of_tracker)
+            self.wm_tracker.leds = [0, 1, 0, 0]
             pass
 
         # mode with bluetooth mac adresses on stdin, 2 adresses should be passed
@@ -278,7 +281,8 @@ class WiimoteGame:
 
             x_on_screen, y_on_screen = self.tracking.process_ir_data(left, right)
             # Pass the coordinates to the player.
-            self.player.set_player_coordinates(x_on_screen, y_on_screen)
+            if x_on_screen >= 0 and x_on_screen <= Constants.WIDTH and x_on_screen >= 0 and x_on_screen <= Constants.HEIGHT:
+                self.player.set_player_coordinates(x_on_screen, y_on_screen)
 
     # Starting the game loop
     def start_loop(self):
@@ -356,10 +360,10 @@ class WiimoteGame:
     # Draws the background on the screen. It is composed of three images. Depending on the movement of the head, the two layers of the trees get moved accordingly, to create some sort of a small 3D effect.
     def draw_background_images(self):
         Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_1, (0,0))
-        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_2, (-(pygame.mouse.get_pos()[0] - Constants.WIDTH/2)/100 -50,
-                                                                  -(pygame.mouse.get_pos()[1] - Constants.HEIGHT/2)/100))
-        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_3, (-(pygame.mouse.get_pos()[0] - Constants.WIDTH/2)/50 - 50,
-                                                                  -(pygame.mouse.get_pos()[1] - Constants.HEIGHT/2)/50))
+        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_2, (-(self.player.get_player_coordinates()[0] - Constants.WIDTH/2)/100 -50,
+                                                                  -(self.player.get_player_coordinates()[1] - Constants.HEIGHT/2)/100))
+        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_3, (-(self.player.get_player_coordinates()[0] - Constants.WIDTH/2)/50 - 50,
+                                                                  -(self.player.get_player_coordinates()[1] - Constants.HEIGHT/2)/50))
 
     def display_game_over_screen(self):
         Constants.SCREEN.fill(Constants.GAME_OVER_SCREEN_COLOR)
@@ -401,7 +405,7 @@ class WiimoteGame:
         highscore = Highscore().get_highscore()
 
         font = pygame.font.Font(None, 30)
-        highscore_title = font.render("SCORE" , 1, (255, 255, 255), (100, 100, 100))
+        highscore_title = font.render("HIGHSCORE" , 1, (255, 255, 255), (100, 100, 100))
         Constants.SCREEN.blit(highscore_title, highscore_title.get_rect(center=(Constants.WIDTH/2, 7/10 * Constants.HEIGHT - 40)))
         for i in range(len(highscore)):
             highscore_entry = font.render(str(highscore[i][0]) + ": " + str(highscore[i][1]) , 1, (255, 255, 255), (100,100,100))
@@ -578,7 +582,6 @@ class WiimoteGame:
     # checks if the player is overlapped by an enemy
     def check_enemy_behind(self):
         for enemy in self.enemies:
-            # is true as soon as the enemy waiting delay is over
             check_for_overlapping = enemy.get_collision()
             if (check_for_overlapping == True):
 
@@ -754,16 +757,6 @@ class Enemy(pygame.sprite.Sprite):
 
     # from https://stackoverflow.com/questions/20044791/how-to-make-an-enemy-follow-the-player-in-pygame
     def move_towards_player(self, Player):
-        #if(self.enemy_iterator < len(self.enemy_sprite)-1):
-
-            #self.enemy_iterator += 1
-            #print(self.enemy_iterator)
-        #else:
-            #self.enemy_iterator =0
-            #print(self.enemy_iterator)
-
-        #self.image = pygame.transform.scale(self.enemy_sprite[self.enemy_iterator], (90, 90))
-
 
         self.image.set_colorkey((0, 0, 0))
         speed = self.speed
@@ -827,6 +820,9 @@ class Player(pygame.sprite.Sprite):
     def set_player_coordinates(self, x, y):
         self.centerx = x
         self.centery = y
+
+    def get_player_coordinates(self):
+        return self.centerx, self.centery
 
     # moves player based on keyboard input
     # todo: change player movement by headtracking coordinates
@@ -1317,10 +1313,6 @@ class Tracking:
 
     def process_ir_data(self, left, right):
 
-        #Temp:
-        #self.WIDTH = 1920
-        #self.HEIGHT = 1080
-
         # Since we want direct movement (e.g move head up -> move player on screen up), the coordinate points need to be inverted. Otherwise, movements will be in the wrong direction
         inverted_left = (Constants.WIIMOTE_IR_CAM_WIDTH - left[0], Constants.WIIMOTE_IR_CAM_HEIGHT - left[1])
         inverted_right = (Constants.WIIMOTE_IR_CAM_WIDTH - right[0], Constants.WIIMOTE_IR_CAM_HEIGHT - right[1])
@@ -1331,17 +1323,15 @@ class Tracking:
         # The coordinates of the head center are for the resolution of the Wiimote IR Cam (1024x768). To position the player correctly on the screen, new coordinates need to be calculated, suited for the resolution of the screen.
         x_on_screen = int((center[0] / Constants.WIIMOTE_IR_CAM_WIDTH) * Constants.WIDTH)
         y_on_screen = int((center[1] / Constants.WIIMOTE_IR_CAM_HEIGHT) * Constants.HEIGHT)
-        # Temp: Invert x
-        x_on_screen = self.WIDTH - x_on_screen
-        print("X on screen: ", x_on_screen)
-        print("Y on screen: ", y_on_screen)
+
+        if Constants.INVERT_HEAD_TRACKING_LEFT_RIGHT:
+            x_on_screen = Constants.WIDTH - x_on_screen  # Invert x
+
         return x_on_screen, y_on_screen
 
 
 def main():
-    #app = QtWidgets.QApplication(sys.argv)
     wiimote_game = WiimoteGame()
-    #sys.exit(app.exec_())
     sys.exit()
 
 

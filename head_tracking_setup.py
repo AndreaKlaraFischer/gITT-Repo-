@@ -18,6 +18,8 @@ from PyQt5.QtCore import QRect
     
     The blue point marks the middle point of the Head-Tracking-Glasses.
     We use that point for the player pos.
+    
+    Purple points are used to show occurences where only one ore more than two LEDs are in the FOV of the Wiimote Camera
 
 
 """
@@ -36,6 +38,7 @@ class HeadTrackingSetup(QWidget):
         self.left = (0,0)
         self.right = (0,0)
         self.center = (0,0)
+        self.other_points =  []
 
         self.connect_wiimote()
         self.initUI()
@@ -58,7 +61,15 @@ class HeadTrackingSetup(QWidget):
             right = (ir_data[1]["x"], ir_data[1]["y"])
             self.invert_points(left, right)
             self.calculate_head_center()
-            self.update()
+        elif len(ir_data) is not 0:
+            print(ir_data)
+            self.other_points = []
+            for i in range(len(ir_data)):
+                self.other_points.append(self.invert_point((ir_data[i]["x"],ir_data[i]["y"])))
+        self.update()
+
+    def invert_point(self, point):
+        return (self.WIIMOTE_IR_CAM_WIDTH - point[0], self.WIIMOTE_IR_CAM_HEIGHT - point[1])
 
     def invert_points(self, left, right):
         self.left = (self.WIIMOTE_IR_CAM_WIDTH - left[0], self.WIIMOTE_IR_CAM_HEIGHT - left[1])
@@ -89,6 +100,10 @@ class HeadTrackingSetup(QWidget):
         # Middle point between two LEDs
         qp.setBrush(QColor(0, 0, 255))
         qp.drawRect(self.center[0], self.center[1], 20, 20)
+
+        qp.setBrush(QColor(80, 0, 80))
+        for i in range(len(self.other_points)):
+            qp.drawRect(self.other_points[i][0], self.other_points[i][1], 20, 20)
 
         qp.setBrush(QColor(0, 255, 0))
         qp.drawRect(self.WIIMOTE_IR_CAM_CENTER[0], self.WIIMOTE_IR_CAM_CENTER[1], 20, 20)
