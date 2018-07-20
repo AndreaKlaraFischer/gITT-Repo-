@@ -46,7 +46,7 @@ class Constants:
     WIIMOTE_IR_CAM_CENTER = (WIIMOTE_IR_CAM_WIDTH/2, WIIMOTE_IR_CAM_HEIGHT/2)
     MOVING_AVERAGE_NUM_VALUES = 5  # num of values that should be buffered for moving average filter
 
-    WIIMOTE_TRACKER_ADDRESS = "B8:AE:6E:F1:39:81"
+    WIIMOTE_TRACKER_ADDRESS = "B8:AE:6E:55:B5:0F"
     WIIMOTE_POINTER_ADDRESS = "B8:AE:6E:1B:5B:03"
 
     # The tracking of the head needs to be inverted if the tracking wiimote is behind and not in front of the player
@@ -93,10 +93,14 @@ class WiimoteGame:
 
         self.pointer_x_values = []
         self.pointer_y_values = []
-
+        self.tracker_x_values = []
+        self.tracker_y_values = []
         self.drawing_x_values = []
         self.drawing_y_values = []
+
         self.currently_drawing = False
+        self.drawing_ok = False
+
         self.barricade = {}
 
         self.enemies_at_once = 1
@@ -219,6 +223,7 @@ class WiimoteGame:
             self.wm_tracker.leds = [0, 1, 0, 0]
             pass
 
+
         # mode with bluetooth mac adresses on stdin, 2 adresses should be passed
         if len(sys.argv) == 3:
             tracker = sys.argv[1]
@@ -279,18 +284,37 @@ class WiimoteGame:
 
     # Get the IR data from the "Tacker" Wiimote
     def get_ir_data_of_tracker(self, ir_data):
-        if len(ir_data) == 2:
-            left = (ir_data[0]["x"], ir_data[0]["y"])
-            right = (ir_data[1]["x"], ir_data[1]["y"])
+        if len(ir_data) == 1 or len(ir_data) ==2:
+            self.play_sound("no_ammo")
 
             # Check if the Wiimote is outputting wrong values. (If IR is not working, x and y values will be 1023)
-            if left[0] == 1023 and left[1] == 1023:
+            if ir_data[0]["x"] == 1023 and ir_data[0]["x"] == 1023:
                 return
 
-            x_on_screen, y_on_screen = self.tracking.process_ir_data(left, right)
-            # Pass the coordinates to the player.
-            if x_on_screen >= 0 and x_on_screen <= Constants.WIDTH and x_on_screen >= 0 and x_on_screen <= Constants.HEIGHT:
-                self.player.set_player_coordinates(x_on_screen, y_on_screen)
+            x_on_screen = 0
+            y_on_screen = 0
+
+            if len(ir_data) == 1:
+                return
+                single_led = (ir_data[0]["x"], ir_data[0]["y"])
+                x_on_screen, y_on_screen = self.tracking.process_ir_data_one_led(single_led)
+
+            if len(ir_data) == 2:
+                left = (ir_data[0]["x"], ir_data[0]["y"])
+                right = (ir_data[1]["x"], ir_data[1]["y"])
+                x_on_screen, y_on_screen = self.tracking.process_ir_data_two_leds(left, right)
+
+            #self.tracker_x_values.append(x_on_screen)
+            #self.tracker_y_values.append(y_on_screen)
+
+            # Filter values using the moving average filter
+            #if len(self.tracker_x_values) == Constants.MOVING_AVERAGE_NUM_VALUES:
+                #filtered_x, filtered_y = self.moving_average(self.tracker_x_values, self.tracker_y_values)
+                #self.tracker_x_values = []
+                #self.tracker_y_values = []
+                if x_on_screen >= 0 and x_on_screen <= Constants.WIDTH and x_on_screen >= 0 and x_on_screen <= Constants.HEIGHT:
+                    # Pass the coordinates to the player.
+                    self.player.set_player_coordinates(x_on_screen, y_on_screen)
 
     # Starting the game loop
     def start_loop(self):
@@ -386,7 +410,7 @@ class WiimoteGame:
         Constants.SCREEN.blit(game_over_message, game_over_message.get_rect(center=(Constants.WIDTH/2, 1/10 * Constants.HEIGHT)))
 
         font = pygame.font.Font(None, 36)
-        highscore_message = font.render("Your Highscore is " + str(self.highscore), 1, (255, 255, 255))
+        highscore_message = font.render("Your Score is " + str(self.highscore), 1, (255, 255, 255))
         restart_message = font.render("Type in your name using the Wiimote D-Pad", 1, (255, 255, 255))
         save_message = font.render("Press 'Home' to restart", 1, (255, 255, 255), (100,100,100))
         Constants.SCREEN.blit(highscore_message, highscore_message.get_rect(center=(Constants.WIDTH/2, 2/10 * Constants.HEIGHT)))
@@ -438,7 +462,9 @@ class WiimoteGame:
 
         # Check if user finished drawing on the screen
         if not self.wm_pointer.buttons['A'] and len(self.drawing_x_values) > 0:
-            self.gesture_recognizer.recognize_drawing(self.drawing_x_values, self.drawing_y_values)
+            self.currently_drawing = False
+            self.drawing_ok = self.gesture_recognizer.recognize_drawing(self.drawing_x_values, self.drawing_y_values)
+            print(self.drawing_ok)
             self.currently_drawing = False
             self.drawing_x_values = []
             self.drawing_y_values = []
@@ -455,9 +481,7 @@ class WiimoteGame:
                     self.drawing_x_values.append(cursor_pos[0])
                     self.drawing_y_values.append(cursor_pos[1])
 
-            if self.currently_drawing == True:
-                print("")
-            else:
+            if not self.currently_drawing:
                 print("Drawing Started")
                 self.barricade = {}
 
@@ -474,8 +498,6 @@ class WiimoteGame:
             playername = ""
             for i in range(len(self.player_name)):
                 char = self.player_name[i]
-                if char == "_":
-                    char = " "
                 playername += char
 
             Highscore().update_highscore(playername, self.highscore)
@@ -535,13 +557,14 @@ class WiimoteGame:
         if abs(start_y-min_y) > abs(start_y-max_y):
             barricade_y = min_y
 
-        self.barricade = {
-            "barricade_x": barricade_x,
-            "barricade_y":  barricade_y,
-            "width": width,
-            "height": height,
-            "creation_time": time.time()
-        }
+        if self.drawing_ok:
+            self.barricade = {
+                "barricade_x": barricade_x,
+                "barricade_y":  barricade_y,
+                "width": width,
+                "height": height,
+                "creation_time": time.time()
+            }
 
     def display_hint(self, hint):
         font = pygame.font.Font(None, 50)
@@ -552,6 +575,7 @@ class WiimoteGame:
         # Destroy barricade after a certain amount of time:
         if "creation_time" in self.barricade and time.time() - self.barricade["creation_time"] > Constants.BARRICADE_LIFETIME:
             self.barricade = {}
+            self.drawing_ok = False
 
         if not self.currently_drawing and "barricade_x" in self.barricade.keys():
             pygame.draw.rect(Constants.SCREEN,Constants.BARRICADE_COLOR,(self.barricade["barricade_x"], self.barricade["barricade_y"], self.barricade["width"], self.barricade["height"]))
@@ -1012,36 +1036,14 @@ Gestures without libraries, toolkits or training: A $1 recognizer for user inter
 class GestureRecognizer:
 
     def __init__(self):
-        self.N = 64  # num of points after resampling
-        self.SIZE = 100  # Size of bounding box
-        # Code taken from https://stackoverflow.com/questions/25212181/is-the-golden-ratio-defined-in-python
-        self.PHI = (1 + 5 ** 0.5) / 2
-        # Treshold according to the paper is 2° (p.5)
-        self.TRESHOLD = 2
-
-        self.templates = []
-        self.template_names = []
+        """init recognizer"""
+        self.gestures = []
+        self.names = []
+        self.N = 64
+        self.size = 100
+        self.origin = 100, 100
+        self.ratio = 1/2 * (-1 + np.sqrt(5))
         self.load_templates()
-
-
-    def recognize_drawing(self, drawing_x_coordinates, drawing_y_coordinates):
-
-        if len(drawing_x_coordinates) < 4:  # Skip recognition if not enough points are drawn (so no error shows)
-            return
-
-        points = []
-
-        for i in range(len(drawing_x_coordinates)):
-            points.append([drawing_x_coordinates[i], drawing_y_coordinates[i]])
-
-        resampled_points = self.resample(points, self.N)
-        rotated_points = self.rotate_to_zero(resampled_points)
-        scaled_points = self.scale_to_square(rotated_points, self.SIZE)
-        points_for_recognition = self.translate_to_origin(scaled_points)
-
-        recgonize = self.recognize(points_for_recognition, self.templates)
-
-        return "Test"
 
     # get all templates that are stored as data values within csv files
     def load_templates(self):
@@ -1050,7 +1052,7 @@ class GestureRecognizer:
         for file in csv_files:
             # split file at ".", so that only the name without ".csv" is returned
             filename = file.split(".")[0]
-            self.template_names.append(filename)
+            self.names.append(filename)
             template = []
 
             with open(file) as csvfile:
@@ -1058,200 +1060,178 @@ class GestureRecognizer:
                 for row in readcsv:
                     # get content of csv and store it in template list
                     template.append([float(row[0]), float(row[1])])
-            self.templates.append(template)
+            self.gestures.append(template)
 
-    # Done according to the pseudo-code from the paper "Wobbrock, J.O., Wilson, A.D. and Li, Y. (2007).
-    # Gestures without libraries, toolkits or training: A $1 recognizer for user interface prototypes."
-    def resample(self, points, n):
-        increment = self.path_length(points) / (n-1)  # Increment I
-        D = 0
+    def recognize_drawing(self, drawing_x_coordinates, drawing_y_coordinates):
+        if len(drawing_x_coordinates) < 4:  # Skip recognition if not enough points are drawn (so no error shows)
+            return
 
-        new_points = [points[0]]
+        points = []
 
+        for i in range(len(drawing_x_coordinates)):
+            points.append([drawing_x_coordinates[i], drawing_y_coordinates[i]])
+
+        resampled_points = self.resample(points)
+        rotated_points = self.rotate(resampled_points)
+        scaled_points = self.scale(rotated_points)
+        points_for_recognition = self.translate(scaled_points)
+        recgonize = self.recognize(points_for_recognition)
+
+        return recgonize
+
+    def resample(self, gesture):
+        """the input gestures are sampled to the length n and the list newPoints is returned"""
+        newPoints = [gesture[0]]
+        distance = 0.0
+        path = self.pathLength(gesture)
+        pathLen = path / (self.N - 1)
         i = 1
-        j = len(points)
-
-        # iterate over all points of a gesture
-        while i < j:
-            d = self.distance(points[i-1], points[i])
-
-            if (D + d) >= increment:
-                qx = points[i-1][0] + ((increment - D) / d) * (points[i][0] - points[i-1][0])
-                qy = points[i-1][1] + ((increment - D) / d) * (points[i][1] - points[i-1][1])
-
-                new_points.append([qx, qy])
-                # Insert into list: https://www.tutorialspoint.com/python/list_insert.htm
-                points.insert(i, [qx, qy])
-                D = 0
+        while i < len(gesture):
+            d = self.Distance(gesture[i-1], gesture[i])
+            if distance + d >= pathLen:
+                x = gesture[i-1][0] + ((pathLen - distance)/d) * (gesture[i][0] - gesture[i-1][0])
+                y = gesture[i-1][1] + ((pathLen - distance)/d) * (gesture[i][1] - gesture[i-1][1])
+                q = (x, y)
+                newPoints.append(q)
+                gesture.insert(i, q)
+                distance = 0.0
             else:
-                D += d
-
-            j = len(points)
+                distance += d
             i += 1
-        # This part is implemented like here: https://depts.washington.edu/madlab/proj/dollar/dollar.js
-        # handle issue, if there are less points than n
-        if len(new_points) == (n - 1):
-            new_points.append([points[len(points) - 1][0], points[len(points) - 1][1]])
+        if len(newPoints) == self.N - 1:
+            newPoints.append(gesture[len(gesture)-1])
+        return newPoints
 
-        return new_points
+    def Distance(self, p1, p2):
+        """the distance between two points is calculated and returned"""
+        dx = p2[0] - p1[0]
+        dy = p2[1] - p1[1]
+        return math.sqrt(dx*dx + dy*dy)
 
-    # According to the paper: Find the gestures indicative angle (the angle formed between the centroid
-    # of the gesture and the gestures first point). Then rotate the gesture so the angle is at 0°
-    def rotate_to_zero(self, points):
-        c = self.centroid(points)
-        # Atan2 is needed (see: https://depts.washington.edu/madlab/proj/dollar/dollar.js)
-        theta = math.atan2(c[1] - points[0][1], c[0] - points[0][0])
-        new_points = self.rotate_by(points, math.radians(-theta))
-        return new_points
+    def centroid(self, gesture):
+        """the centroid of the gesture is calculated and returned"""
+        x = y = 0
+        for i in range(len(gesture)):
+            x = x + gesture[i][0]
+            y = y + gesture[i][1]
 
-    def rotate_by(self, points, angle):
-        c = self.centroid(points)
+        x = x/len(gesture)
+        y = y/len(gesture)
+        return x, y
 
-        new_points = []
-        cos = math.cos(angle)
-        sin = math.sin(angle)
-        # create list of rotated points
-        for point in points:
-            qx = (point[0] - c[0]) * cos - (point[1] - c[1]) * sin + c[0]
-            qy = (point[0] - c[0]) * sin - (point[1] - c[1]) * cos + c[0]
-            new_points.append([qx, qy])
+    def pathLength(self, gesture):
+        """the length of the gesture including all points is calculated and returned"""
+        distance = 0.0
+        for i in range(1, len(gesture)):
+            d = self.Distance(gesture[i - 1], gesture[i])
+            distance += d
 
-        return new_points
+        return distance
 
-    # scale down all points so that they fit in a bounding box with a fixed size
-    def scale_to_square(self, points, size):
-        B = self.bounding_box(points)
+    def rotate(self, gesture):
+        """the gesture is rotated and returned"""
+        centroid = self.centroid(gesture)
+        radians = np.arctan2(centroid[1]-gesture[0][1], centroid[0]-gesture[0][0])
+        newPoints = self.rotateBy(gesture, radians)
+        return newPoints
 
-        new_points = []
+    def rotateBy(self, gesture, radians):
+        """the gesture is rotated depending on the given angle"""
+        centroid = self.centroid(gesture)
+        cos = np.cos(-radians)
+        sin = np.sin(-radians)
+        newPoints = []
+        for i in range(len(gesture)):
+            x = (gesture[i][0] - centroid[0]) * cos - (gesture[i][1] - centroid[1]) * sin + centroid[0]
+            y = (gesture[i][0] - centroid[0]) * sin + (gesture[i][1] - centroid[1]) * cos + centroid[1]
+            newPoints.append([float(x), float(y)])
+        return newPoints
 
-        for point in points:
-            qx = point[0] * (size / B[0])
-            qy = point[1] * (size / B[1])
-            new_points.append([qx, qy])
+    def scale(self, gesture):
+        """the gesture is scaled to a defined size and the calculated newPoints are returned"""
+        self.boundingBox = self.getBoundingBox(gesture)
+        newPoints = []
+        for i in range(len(gesture)):
 
-        return new_points
+            x = gesture[i][0] * (self.size / (self.boundingBox[1][0] - self.boundingBox[0][0]))
+            y = gesture[i][1] * (self.size / (self.boundingBox[1][1] - self.boundingBox[0][1]))
 
-    # moves points to the origin
-    def translate_to_origin(self, points):
-        c = self.centroid(points)
+            newPoints.append([float(x), float(y)])
 
-        new_points = []
+        return newPoints
 
-        for point in points:
-            qx = point[0] - c[0]
-            qy = point[1] - c[1]
-            new_points.append([qx, qy])
+    def getBoundingBox(self, gesture):
+        """defines the minimum and maximum points of the gesture and returns these"""
+        minX, minY = np.min(gesture, 0)
+        maxX, maxY = np.max(gesture, 0)
 
-        return new_points
+        return (minX, minY), (maxX, maxY)
 
-    # predicts the entered gesture
-    def recognize(self, points, templates):
+    def translate(self, gesture):
+        """the gesture is translated depending on the given origin point, the calculated new points are returned"""
+        newPoints = []
+        c = np.mean(gesture, 0)
+        for i in range(len(gesture)):
+            x = gesture[i][0] + self.origin[0] - c[0]
+            y = gesture[i][1] + self.origin[1] - c[1]
+            newPoints.append([float(x), float(y)])
 
-        b = math.inf
+        return newPoints
 
-        self.best_find = self.template_names[0]
-        # iterate over all templates and check, which of them has the smallest distance to the entered gesture
-        for i in range(len(templates)):
-            d = self.distance_at_best_angle(points, templates[i], -math.radians(45), math.radians(45), 2)
+    def recognize(self, points):
+        """calculates the distance between points and templates and returns the number of template
+        if there is no recognition -1 is returned"""
+        numGesture = -1
+        b = np.inf
+        angle = 45
+        a = 2
+        for i in range(len(self.gestures)):
+            template = self.gestures[i]
+            d = self.distanceAtBestAngle(points, template, - angle, angle, a)
+            print(self.names[i], d)
             if d < b:
                 b = d
-                self.best_find = self.template_names[i]
+                numGesture = i
+        if b < 15:
+            return True
+        else:
+            return False
 
-        score = 1 - b / 0.5 * math.sqrt(self.SIZE**2 + self.SIZE**2)
-        return [self.best_find, score]
+    def distanceAtBestAngle(self, points, T, minAngle, angle, a):
+        """the minimum distance in dependence on the angle is calculated"""
+        x1 = self.ratio * minAngle + (1-self.ratio) * angle
+        f1 = self.distanceAtAngle(points, T, x1)
+        x2 = (1-self.ratio) * minAngle + self.ratio * angle
+        f2 = self.distanceAtAngle(points, T, x2)
 
-    # Function implemented like here: https://depts.washington.edu/madlab/proj/dollar/dollar.js
-    # get the minimal matching distance between a template and a gesture
-    def distance_at_best_angle(self, points, template, a, b, treshold):
-        x1 = self.PHI * a + (1 - self.PHI) * b
-
-        f1 = self.distance_at_angle(points, template, x1)
-        x2 = (1 - self.PHI) * a + self.PHI * b
-
-        f2 = self.distance_at_angle(points, template, x2)
-
-        while abs(b - a) > treshold:
+        while np.abs(angle - minAngle) > a:
             if f1 < f2:
-                b = x2
+                angle = x2
                 x2 = x1
                 f2 = f1
-                x1 = self.PHI * a + (1 - self.PHI) * b
-                f1 = self.distance_at_angle(points, template, x1)
+                x1 = self.ratio*minAngle + (1 - self.ratio) * angle
+                f1 = self.distanceAtAngle(points, T, x1)
             else:
-                a = x1
+                minAngle = x1
                 x1 = x2
                 f1 = f2
-                x2 = (1 - self.PHI) * a + self.PHI * b
-                f2 = self.distance_at_angle(points, template, x2)
+                x2 = (1-self.ratio)*minAngle + self.ratio*angle
+                f2 = self.distanceAtAngle(points, T, x2)
 
-        return max(f1, f2)
+        return min(f1, f2)
 
-    # returns the distance of rotated points in comparison to a template
-    def distance_at_angle(self, points, template, angle):
-        new_points = self.rotate_by(points, angle)
-        return self.path_distance(new_points, template)
-
-    # calculates the path between two points
-    def path_distance(self, A, B):
-        d = 0
-        for i in range(len(A)):
-            d += self.distance(A[i], B[i])
-        return d / len(A)
-
-    # Function implemented like here: https://depts.washington.edu/madlab/proj/dollar/dollar.js
-    # calculates the bounding box
-    def bounding_box(self, points):
-
-        min_x = math.inf
-        max_x = -math.inf
-        min_y = math.inf
-        max_y = -math.inf
-
-        for point in points:
-            if point[0] < min_x:
-                min_x = point[0]
-            if point[0] > max_x:
-                max_x = point[0]
-
-            if point[1] < min_y:
-                min_y = point[1]
-            if point[1] > max_y:
-                max_y = point[1]
-
-        width = max_x - min_x
-        height = max_y - min_y
-        return [width, height]
-
-    # Function implemented like here: https://depts.washington.edu/madlab/proj/dollar/dollar.js
-    # returns the centroid values of a given set of points
-    def centroid(self, points):
-        x = 0
-        y = 0
-
-        for i in range(len(points)):
-            x = x + points[i][0]
-            y = y + points[i][1]
-
-        x = x / len(points)
-        y = y / len(points)
-
-        return [x, y]
-
-    # Done according to the pseudo-code from the paper "Wobbrock, J.O., Wilson, A.D. and Li, Y. (2007).
-    # Gestures without libraries, toolkits or training: A $1 recognizer for user interface prototypes."
-    # calculates the length of a path of points
-    def path_length(self, points):
-        d = 0
-
-        for i in range(1, len(points)):
-            d += self.distance(points[i-1], points[i])
-
+    def distanceAtAngle(self, points, T, x1):
+        """the distance between points and template is calculated"""
+        newPoints = self.rotateBy(points, x1)
+        d = self.pathDistance(newPoints, T)
         return d
 
-    # Done with Pythagoras c = sqrt((xA-xB)² + (yA-yB)²)
-    # calculate the distance between two points
-    def distance(self, point_one, point_two):
-        return math.sqrt((point_two[0] - point_one[0])**2 + (point_two[1] - point_one[1])**2)
+    def pathDistance(self, A, B):
+        """the path Distance between gesture A and a gesture from the """
+        d = 0
+        for i in range(len(A)):
+            d += self.Distance(A[i], B[i])
+        return d/len(A)
 
 
 """
@@ -1341,7 +1321,19 @@ the player on the screen.
 """
 class Tracking:
 
-    def process_ir_data(self, left, right):
+    def process_ir_data_one_led(self, single_led):
+
+        print(single_led)
+
+        inverted_x, inverted_y = self.invert_coordinates(single_led[0], single_led[1])
+        x_on_screen, y_on_screen = self.to_screen_coordinates(inverted_x, inverted_y)
+
+        return x_on_screen, y_on_screen
+
+
+    def process_ir_data_two_leds(self, left, right):
+
+        print(left, right)
 
         # Since we want direct movement (e.g move head up -> move player on screen up), the coordinate points need to be inverted. Otherwise, movements will be in the wrong direction
         inverted_left = (Constants.WIIMOTE_IR_CAM_WIDTH - left[0], Constants.WIIMOTE_IR_CAM_HEIGHT - left[1])
@@ -1358,6 +1350,19 @@ class Tracking:
             x_on_screen = Constants.WIDTH - x_on_screen  # Invert x
 
         return x_on_screen, y_on_screen
+
+    def invert_coordinates(self, x,y):
+        return (Constants.WIIMOTE_IR_CAM_WIDTH - x, Constants.WIIMOTE_IR_CAM_HEIGHT - y)
+
+    def to_screen_coordinates(self, x, y):
+        x_on_screen = int((x / Constants.WIIMOTE_IR_CAM_WIDTH) * Constants.WIDTH)
+        y_on_screen = int((y / Constants.WIIMOTE_IR_CAM_HEIGHT) * Constants.HEIGHT)
+
+        if Constants.INVERT_HEAD_TRACKING_LEFT_RIGHT:
+            x_on_screen = Constants.WIDTH - x_on_screen  # Invert x
+
+        return x_on_screen, y_on_screen
+
 
 
 def main():
