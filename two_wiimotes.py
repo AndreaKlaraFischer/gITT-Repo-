@@ -21,7 +21,8 @@ Sources:
     # Enemies: http://edmundmcmillen.tumblr.com/post/25278589277/click-the-image-to-view-it-at-full-rez-so-the
     # Heart: https://opengameart.org/content/heart-2 (CC0 1.0)
     # Bullet: https://opengameart.org/content/weapon-icons-1 by BrighamKeys(CC-BY-SA 3.0)
-    # Bullet hole: created by Vitus using a texture from https://opengameart.org/content/broken-glass created by Cookie (CC BY 3.0) 
+    # Bullet hole: created by Vitus using a texture from https://opengameart.org/content/broken-glass
+                   created by Cookie (CC BY 3.0)
     # Forest Background: https://opengameart.org/content/forest-background (CC0 1.0)
 
     Sounds:
@@ -33,24 +34,31 @@ Sources:
     # Sound "game_over.wav": https://freesound.org/people/noirenex/sounds/159408/ (CC0 1.0)
 """
 
+
 # Pygame needs to be initialized at the beginning
 pygame.init()
+
 
 """
 For easy access to constants from all classes, they have been put into their own class.
 """
+
+
 class Constants:
-    WIIMOTE_TRACKER_ADDRESS = "B8:AE:6E:55:B5:0F" # MAC Address of the "Tracker" Wiimote
+    WIIMOTE_TRACKER_ADDRESS = "B8:AE:6E:55:B5:0F"  # MAC Address of the "Tracker" Wiimote
     WIIMOTE_POINTER_ADDRESS = "B8:AE:6E:1B:5B:03"  # MAC Address of the "Pointer" Wiimote
 
     WIIMOTE_IR_CAM_WIDTH = 1024  # Horizontal resolution of the Wiimote IR Camera
     WIIMOTE_IR_CAM_HEIGHT = 768  # Vertical Resolution of the Wiimote IR Camera
-    WIIMOTE_IR_CAM_CENTER = (WIIMOTE_IR_CAM_WIDTH/2, WIIMOTE_IR_CAM_HEIGHT/2)  # Center coordinates of the Wiimote IR Camera
+
+    # Center coordinates of the Wiimote IR Camera
+    WIIMOTE_IR_CAM_CENTER = (WIIMOTE_IR_CAM_WIDTH/2, WIIMOTE_IR_CAM_HEIGHT/2)
+
     FPS = 60  # Target FPS of the game
     ENEMY_DELAY = 30  # Steps before an enemy can hit a player
-    DURATION_BETWEEN_ENEMIES = 150 # Steps between enemy spawns
-    CROSSHAIR_SIZE  = 100  # Size in pixel of the Crosshair
-    MOVING_AVERAGE_NUM_VALUES = 5   # num of values that should be buffered for moving average filter
+    DURATION_BETWEEN_ENEMIES = 150  # Steps between enemy spawns
+    CROSSHAIR_SIZE = 100  # Size in pixel of the Crosshair
+    MOVING_AVERAGE_NUM_VALUES = 5  # num of values that should be buffered for moving average filter
 
     # The tracking of the head needs to be inverted if the tracking wiimote is behind and not in front of the player
     INVERT_HEAD_TRACKING_LEFT_RIGHT = True
@@ -58,8 +66,8 @@ class Constants:
     ENEMY_SIZE = 100  # Size of the enemies in pixel
     BULLET_HOLE_SIZE = 50  # Size of the bullet holes on screen in pixel
     BARRICADE_LIFETIME = 5  # Lifetime of a barricade in seconds
-    MUNITION_COUNT = 10 # Num shots after reload
-    MAX_NUM_LIVES = 5 # Lifes at beginning of the game
+    MUNITION_COUNT = 10  # Num shots after reload
+    MAX_NUM_LIVES = 5  # Lifes at beginning of the game
     TIME_BETWEEN_SHOTS = 0.5  # Time in seconds between the player can fire another bullet.
     NAME_INPUT_SCROLL_SPEED = 0.1  # Speed of the cursor movement while entering the player name
 
@@ -82,9 +90,15 @@ class Constants:
     IMG_DIR = path.join(path.dirname(__file__), 'img')  # defines the directory where all images are located
 
     # Images used in the game:
-    GAME_BACKGROUND_LAYER_1 = pygame.transform.scale(pygame.image.load(path.join(IMG_DIR, "parallax-forest-back-trees.png")), (WIDTH, HEIGHT)).convert()
-    GAME_BACKGROUND_LAYER_2 = pygame.transform.scale(pygame.image.load(path.join(IMG_DIR, "parallax-forest-middle-trees.png")), (WIDTH + 100, HEIGHT)).convert_alpha()
-    GAME_BACKGROUND_LAYER_3 = pygame.transform.scale(pygame.image.load(path.join(IMG_DIR, "parallax-forest-front-trees.png")), (WIDTH + 100, HEIGHT)).convert_alpha()
+    GAME_BACKGROUND_LAYER_1 = \
+        pygame.transform.scale(pygame.image.load(path.join(IMG_DIR, "parallax-forest-back-trees.png")),
+                               (WIDTH, HEIGHT)).convert()
+    GAME_BACKGROUND_LAYER_2 = \
+        pygame.transform.scale(pygame.image.load(path.join(IMG_DIR, "parallax-forest-middle-trees.png")),
+                               (WIDTH + 100, HEIGHT)).convert_alpha()
+    GAME_BACKGROUND_LAYER_3 = \
+        pygame.transform.scale(pygame.image.load(path.join(IMG_DIR, "parallax-forest-front-trees.png")),
+                               (WIDTH + 100, HEIGHT)).convert_alpha()
     CROSSHAIR_IMAGE = pygame.image.load(path.join(IMG_DIR, "circle-5.png")).convert()
     BULLET_HOLE_IMAGE = pygame.image.load(path.join(IMG_DIR, "bullet_hole.png")).convert_alpha()
     BULLET_IMAGE = pygame.image.load(path.join(IMG_DIR, "bullet.png"))
@@ -113,7 +127,7 @@ class WiimoteGame:
         self.enemies_at_once = 1  # How many enemies can spawn right now
         self.enemies_incrementor = 0
 
-        self.bullet_holes = [] # The locations of all bullet holes are saved here
+        self.bullet_holes = []  # The locations of all bullet holes are saved here
 
         self.player_name = ["A", "A", "A", "A", "A"]  # Letters the player typed in on the Game Over screen
         self.name_input_pos = 0  # Pos of the cursor while entering the player name
@@ -134,9 +148,9 @@ class WiimoteGame:
 
     # sets up game canvas (Main canvas and the two HUD lines)
     def init_canvas(self):
-       self.drawInfoLine("Highscore: 0")
-       self.drawGameCanvas()
-       self.drawMunitionLine(Constants.MUNITION_COUNT, Constants.MAX_NUM_LIVES)
+        self.drawInfoLine("Highscore: 0")
+        self.drawGameCanvas()
+        self.drawMunitionLine(Constants.MUNITION_COUNT, Constants.MAX_NUM_LIVES)
 
     # draws the upper line that displays the highscore on the screen
     def drawInfoLine(self, text):
@@ -174,7 +188,7 @@ class WiimoteGame:
         self.all_sprites = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.players = pygame.sprite.Group()
-        enemy = Enemy(1, 0, 0, 1,randint(1,5))
+        enemy = Enemy(1, 0, 0, 1, randint(1, 5))
         self.enemies.add(enemy)
 
         self.crosshairs = Crosshairs()
@@ -196,8 +210,7 @@ class WiimoteGame:
                 "game_over": pygame.mixer.Sound(path.join("sounds", "game_over.wav"))
             }
             pygame.mixer.music.load(path.join("sounds", "background_music_forest.wav"))
-        except pygame.error:
-            print("Missing audio files!")
+        except pygame.error:  # Catch error if audio files are missing
             sys.exit()
 
     # Start playing the background music
@@ -221,7 +234,6 @@ class WiimoteGame:
 
         self.tracking = Tracking()
         self.pointing = Pointing()
-
 
         # mode with bluetooth MAC adresses on stdin, 2 adresses should be passed
         if len(sys.argv) == 3:
@@ -263,7 +275,8 @@ class WiimoteGame:
                 self.pointer_x_values = []
                 self.pointer_y_values = []
                 # Only update the cursor if it is on the screen
-                if filtered_x >= 0 and filtered_x <= Constants.WIDTH and filtered_y >= 0 and filtered_y <= Constants.HEIGHT:
+                if filtered_x >= 0 and filtered_x <= Constants.WIDTH and \
+                        filtered_y >= 0 and filtered_y <= Constants.HEIGHT:
                     pygame.mouse.set_pos([filtered_x, filtered_y])
 
     # Simple implementation of the moving average filter
@@ -281,7 +294,7 @@ class WiimoteGame:
 
     # Get the IR data from the "Tacker" Wiimote
     def get_ir_data_of_tracker(self, ir_data):
-        if len(ir_data) ==2:  # Looking for the two LEDs of the helmet
+        if len(ir_data) == 2:  # Looking for the two LEDs of the helmet
 
             # Check if the Wiimote is outputting wrong values. (If IR is not working, x and y values will be 1023)
             if ir_data[0]["x"] == 1023 and ir_data[0]["x"] == 1023:
@@ -292,7 +305,8 @@ class WiimoteGame:
             x_on_screen, y_on_screen = self.tracking.process_ir_data_two_leds(left, right)
 
             # Only update the player pos if he is on the screen
-            if x_on_screen >= 0 and x_on_screen <= Constants.WIDTH and x_on_screen >= 0 and x_on_screen <= Constants.HEIGHT:
+            if x_on_screen >= 0 and x_on_screen <= Constants.WIDTH and x_on_screen >= 0 \
+                    and x_on_screen <= Constants.HEIGHT:
                 # Pass the coordinates to the player.
                 self.player.set_player_coordinates(x_on_screen, y_on_screen)
 
@@ -373,11 +387,15 @@ class WiimoteGame:
     # Draws the background on the screen. It is composed of three images. Depending on the movement of the head,
     # the two layers of the trees get moved accordingly, to create some sort of a small 3D effect.
     def draw_background_images(self):
-        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_1, (0,0))
-        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_2, (-(self.player.get_player_coordinates()[0] - Constants.WIDTH/2)/100 -50,
-                                                                  -(self.player.get_player_coordinates()[1] - Constants.HEIGHT/2)/100))
-        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_3, (-(self.player.get_player_coordinates()[0] - Constants.WIDTH/2)/50 - 50,
-                                                                  -(self.player.get_player_coordinates()[1] - Constants.HEIGHT/2)/50))
+        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_1, (0, 0))
+        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_2, (-(self.player.get_player_coordinates()[0]
+                                                                    - Constants.WIDTH/2)/100 - 50,
+                                                                  -(self.player.get_player_coordinates()[1]
+                                                                    - Constants.HEIGHT/2)/100))
+        Constants.SCREEN.blit(Constants.GAME_BACKGROUND_LAYER_3, (-(self.player.get_player_coordinates()[0]
+                                                                    - Constants.WIDTH/2)/50 - 50,
+                                                                  -(self.player.get_player_coordinates()[1]
+                                                                    - Constants.HEIGHT/2)/50))
 
     # Show the game over screen if necessary
     def display_game_over_screen(self):
@@ -389,15 +407,19 @@ class WiimoteGame:
     def draw_game_over_text(self):
         font = pygame.font.Font(None, 100)
         game_over_message = font.render("GAME OVER!", 1, (255, 255, 255))
-        Constants.SCREEN.blit(game_over_message, game_over_message.get_rect(center=(Constants.WIDTH/2, 1/10 * Constants.HEIGHT)))
+        Constants.SCREEN.blit(game_over_message, game_over_message.get_rect(center=(Constants.WIDTH/2,
+                                                                                    1/10 * Constants.HEIGHT)))
 
         font = pygame.font.Font(None, 36)
         highscore_message = font.render("Your Score is " + str(self.highscore), 1, (255, 255, 255))
         restart_message = font.render("Type in your name using the Wiimote D-Pad", 1, (255, 255, 255))
-        save_message = font.render("Press 'Home' to restart", 1, (255, 255, 255), (100,100,100))
-        Constants.SCREEN.blit(highscore_message, highscore_message.get_rect(center=(Constants.WIDTH/2, 2/10 * Constants.HEIGHT)))
-        Constants.SCREEN.blit(restart_message, restart_message.get_rect(center=(Constants.WIDTH/2, 3/10 * Constants.HEIGHT)))
-        Constants.SCREEN.blit(save_message, save_message.get_rect(center=(Constants.WIDTH/2, 4/10 * Constants.HEIGHT)))
+        save_message = font.render("Press 'Home' to restart", 1, (255, 255, 255), (100, 100, 100))
+        Constants.SCREEN.blit(highscore_message, highscore_message.get_rect(center=(Constants.WIDTH/2,
+                                                                                    2/10 * Constants.HEIGHT)))
+        Constants.SCREEN.blit(restart_message, restart_message.get_rect(center=(Constants.WIDTH/2,
+                                                                                3/10 * Constants.HEIGHT)))
+        Constants.SCREEN.blit(save_message, save_message.get_rect(center=(Constants.WIDTH/2,
+                                                                          4/10 * Constants.HEIGHT)))
 
     # Display the UI that allows a user to enter a name
     def draw_name_input(self):
@@ -412,22 +434,31 @@ class WiimoteGame:
             else:
                 letter_font_objects.append(font.render(self.player_name[i], 1, (255, 255, 255)))
 
-        Constants.SCREEN.blit(letter_font_objects[0], letter_font_objects[0].get_rect(center=(Constants.WIDTH/2 - 400, Constants.HEIGHT/2)))
-        Constants.SCREEN.blit(letter_font_objects[1], letter_font_objects[1].get_rect(center=(Constants.WIDTH/2 - 200, Constants.HEIGHT/2)))
-        Constants.SCREEN.blit(letter_font_objects[2], letter_font_objects[2].get_rect(center=(Constants.WIDTH/2, Constants.HEIGHT/2)))
-        Constants.SCREEN.blit(letter_font_objects[3], letter_font_objects[3].get_rect(center=(Constants.WIDTH/2 + 200, Constants.HEIGHT/2)))
-        Constants.SCREEN.blit(letter_font_objects[4], letter_font_objects[4].get_rect(center=(Constants.WIDTH/2 + 400, Constants.HEIGHT/2)))
+        Constants.SCREEN.blit(letter_font_objects[0], letter_font_objects[0].get_rect(center=(Constants.WIDTH/2 - 400,
+                                                                                              Constants.HEIGHT/2)))
+        Constants.SCREEN.blit(letter_font_objects[1], letter_font_objects[1].get_rect(center=(Constants.WIDTH/2 - 200,
+                                                                                              Constants.HEIGHT/2)))
+        Constants.SCREEN.blit(letter_font_objects[2], letter_font_objects[2].get_rect(center=(Constants.WIDTH/2,
+                                                                                              Constants.HEIGHT/2)))
+        Constants.SCREEN.blit(letter_font_objects[3], letter_font_objects[3].get_rect(center=(Constants.WIDTH/2 + 200,
+                                                                                              Constants.HEIGHT/2)))
+        Constants.SCREEN.blit(letter_font_objects[4], letter_font_objects[4].get_rect(center=(Constants.WIDTH/2 + 400,
+                                                                                              Constants.HEIGHT/2)))
 
     # Display the top 10 entries of the highscore on the screen
     def draw_highscore(self):
         highscore = Highscore().get_highscore()
 
         font = pygame.font.Font(None, 30)
-        highscore_title = font.render("HIGHSCORE" , 1, (255, 255, 255), (100, 100, 100))
-        Constants.SCREEN.blit(highscore_title, highscore_title.get_rect(center=(Constants.WIDTH/2, 7/10 * Constants.HEIGHT - 40)))
+        highscore_title = font.render("HIGHSCORE", 1, (255, 255, 255), (100, 100, 100))
+        Constants.SCREEN.blit(highscore_title, highscore_title.get_rect(center=(Constants.WIDTH/2,
+                                                                                7/10 * Constants.HEIGHT - 40)))
         for i in range(len(highscore)):
-            highscore_entry = font.render(str(highscore[i][0]) + ": " + str(highscore[i][1]) , 1, (255, 255, 255), (100,100,100))
-            Constants.SCREEN.blit(highscore_entry, highscore_entry.get_rect(center=(Constants.WIDTH/2, 7/10 * Constants.HEIGHT + (i * 20))))
+            highscore_entry = font.render(str(highscore[i][0]) + ": " + str(highscore[i][1]), 1, (255, 255, 255),
+                                          (100, 100, 100))
+            Constants.SCREEN.blit(highscore_entry, highscore_entry.get_rect(center=(Constants.WIDTH/2,
+                                                                                    7/10 * Constants.HEIGHT
+                                                                                    + (i * 20))))
 
     # Check for Wiimote button input (only on the pointer wiimote)
     def check_wiimote_input(self):
@@ -450,7 +481,6 @@ class WiimoteGame:
         if not self.wm_pointer.buttons['A'] and len(self.drawing_x_values) > 0:
             self.currently_drawing = False
             self.drawing_ok = self.gesture_recognizer.recognize_drawing(self.drawing_x_values, self.drawing_y_values)
-            print(self.drawing_ok)
             self.currently_drawing = False
             self.drawing_x_values = []
             self.drawing_y_values = []
@@ -468,8 +498,7 @@ class WiimoteGame:
                     self.drawing_x_values.append(cursor_pos[0])
                     self.drawing_y_values.append(cursor_pos[1])
 
-            if not self.currently_drawing:
-                print("Drawing Started")
+            if not self.currently_drawing:  # Drawing started if landed here
                 self.barricade = {}
 
             self.currently_drawing = True
@@ -505,7 +534,8 @@ class WiimoteGame:
             elif dir == "Down":
                 index = Constants.NAME_INPUT_LETTERS.index(self.player_name[self.name_input_pos])
                 if (index - 1) < 0:
-                    self.player_name[self.name_input_pos] = Constants.NAME_INPUT_LETTERS[len(Constants.NAME_INPUT_LETTERS)-1]
+                    self.player_name[self.name_input_pos] = \
+                        Constants.NAME_INPUT_LETTERS[len(Constants.NAME_INPUT_LETTERS)-1]
                 else:
                     self.player_name[self.name_input_pos] = Constants.NAME_INPUT_LETTERS[index - 1]
             elif dir == "Left":
@@ -524,7 +554,7 @@ class WiimoteGame:
         if len(self.drawing_x_values) == 0:
             return
 
-        start_x = self.drawing_x_values[0] # Start pos is the first point from the drawing coordinates
+        start_x = self.drawing_x_values[0]  # Start pos is the first point from the drawing coordinates
         start_y = self.drawing_y_values[0]
         min_x = min(self.drawing_x_values)
         max_x = max(self.drawing_x_values)
@@ -536,7 +566,7 @@ class WiimoteGame:
 
         # Notify the user if he wants to draw a barricade is too large (it should not block the entire screen)
         if width > Constants.MAX_BARRICADE_WIDTH or height > Constants.MAX_BARRICADE_HEIGHT:
-            self.barricade =  {}
+            self.barricade = {}
             self.display_hint("Too Big!")
             return
 
@@ -568,15 +598,16 @@ class WiimoteGame:
     # Draw the barricade on the screen
     def draw_barricade(self):
         # Destroy barricade after a certain amount of time:
-        if "creation_time" in self.barricade and time.time() - self.barricade["creation_time"] > Constants.BARRICADE_LIFETIME:
+        if "creation_time" in self.barricade and time.time() - self.barricade["creation_time"] \
+                > Constants.BARRICADE_LIFETIME:
             self.barricade = {}
             self.drawing_ok = False
 
         if not self.currently_drawing and "barricade_x" in self.barricade.keys():
-            pygame.draw.rect(Constants.SCREEN,Constants.BARRICADE_COLOR,(self.barricade["barricade_x"],
-                                                                         self.barricade["barricade_y"],
-                                                                         self.barricade["width"],
-                                                                         self.barricade["height"]))
+            pygame.draw.rect(Constants.SCREEN, Constants.BARRICADE_COLOR, (self.barricade["barricade_x"],
+                                                                           self.barricade["barricade_y"],
+                                                                           self.barricade["width"],
+                                                                           self.barricade["height"]))
 
     # Check if a button press on the wiimote has happened within the defined time frame
     # This prevents a single button click from beeing interpreted as multiple.
@@ -607,7 +638,8 @@ class WiimoteGame:
     # Every time the user shoots, a hole is drawn on the screen.
     def draw_bullet_holes(self):
         for i in range(len(self.bullet_holes)):
-            Constants.SCREEN.blit(Constants.BULLET_HOLE_IMAGE, (self.bullet_holes[i][0] - Constants.BULLET_HOLE_SIZE/2, self.bullet_holes[i][1] - Constants.BULLET_HOLE_SIZE/2))
+            Constants.SCREEN.blit(Constants.BULLET_HOLE_IMAGE, (self.bullet_holes[i][0] - Constants.BULLET_HOLE_SIZE/2,
+                                                                self.bullet_holes[i][1] - Constants.BULLET_HOLE_SIZE/2))
         if len(self.bullet_holes) > 30:  # If too many holes are on the screen, remove the oldest ones
             del self.bullet_holes[0]
 
@@ -617,20 +649,19 @@ class WiimoteGame:
         y = pygame.mouse.get_pos()[1]
         for enemy in self.enemies:
             check_for_overlapping = enemy.get_collision(enemy.rect.centerx, enemy.rect.centery,
-                                                        self.player.rect.width, self.player.rect.height,
                                                         self.player.rect.centerx, self.player.rect.centery)
-            if (check_for_overlapping == True):
-                if "barricade_x" in self.barricade.keys(): # check if barricade is displayed
+            if check_for_overlapping:
+                if "barricade_x" in self.barricade.keys():  # check if barricade is displayed
                     # if there is no collision between an enemy and the barricade that was drawn
                     if not self.check_barricade_collision(self.barricade["width"], self.barricade["height"],
-                                                      self.barricade["barricade_x"],
-                                                      self.barricade["barricade_y"]):
+                                                          self.barricade["barricade_x"],
+                                                          self.barricade["barricade_y"]):
                         self.player_was_hit(enemy)
-                else: # if no barricade is displayed, decrease lives
+                else:  # if no barricade is displayed, decrease lives
                     self.player_was_hit(enemy)
 
     # decreases live of player and handles game over
-    def player_was_hit(self,enemy):
+    def player_was_hit(self, enemy):
         enemy.reset()
         self.play_sound("ouch")
         if self.lives > 1:
@@ -654,15 +685,15 @@ class WiimoteGame:
     def check_level(self):
         position_arr_x = [0, Constants.WIDTH]
         position_arr_y = [0, Constants.HEIGHT]
-        if self.level_seconds_counter > Constants.DURATION_BETWEEN_ENEMIES: # adds an enemy every few ticks
+        if self.level_seconds_counter > Constants.DURATION_BETWEEN_ENEMIES:  # adds an enemy every few ticks
             self.level_seconds_counter = 0
 
             for x in range(0, self.enemies_at_once+1):
                 # adds an enemy that moves in from a random edge
-                enemy = Enemy(1, position_arr_x[randint(0, 1)], position_arr_y[randint(0,1)], 1, randint(1,5))
+                enemy = Enemy(1, position_arr_x[randint(0, 1)], position_arr_y[randint(0, 1)], 1, randint(1, 5))
                 self.enemies.add(enemy)
         else:
-            self.level_seconds_counter +=1
+            self.level_seconds_counter += 1
 
     # Using the collected coordinates, a line gets drawn on the screen when a user is in drawing mode
     def draw_user_drawing(self):
@@ -685,7 +716,7 @@ class WiimoteGame:
                     self.enemies_incrementor += 100
                     if self.enemies_incrementor >= 1000:
                         self.enemies_at_once += 1
-                        self.enemies_incrementor =0
+                        self.enemies_incrementor = 0
                     self.enemies.remove(self.shooted_enemy)
                     self.shot_enemy = False
                     self.shoot_enemy_anim_iterator = 0
@@ -785,7 +816,7 @@ class Enemy(pygame.sprite.Sprite):
         self.image = self.circle_img
         # scales down image
         self.image = pygame.transform.scale(self.circle_img, (Constants.ENEMY_SIZE, Constants.ENEMY_SIZE))
-        self.image.set_colorkey((250, 250, 250)) # avoids a black background
+        self.image.set_colorkey((250, 250, 250))  # avoids a black background
 
         # specifies position of enemy
         self.rect = self.image.get_rect()
@@ -819,7 +850,7 @@ class Enemy(pygame.sprite.Sprite):
 
     # sets explosion image to image in list index defined by iterator that is passed in update method
     def explode(self, iterator):
-        self.speed = 0 # hinder enemy to move any further if he was shooted
+        self.speed = 0  # hinder enemy to move any further if he was shooted
         self.image = pygame.transform.scale(self.explosion_sprite[iterator], (90, 90))
         self.image.set_colorkey((0, 0, 0))
 
@@ -830,7 +861,7 @@ class Enemy(pygame.sprite.Sprite):
     # The enemies can track the player. Code example taken from
     # from https://stackoverflow.com/questions/20044791/how-to-make-an-enemy-follow-the-player-in-pygame
     def move_towards_player(self, Player):
-        self.image.set_colorkey((0, 0, 0)) # removes black background from transparent image
+        self.image.set_colorkey((0, 0, 0))  # removes black background from transparent image
         speed = self.speed
         px = Player.rect.centerx
         py = Player.rect.centery
@@ -850,10 +881,10 @@ class Enemy(pygame.sprite.Sprite):
             self.enemy_delay = Constants.ENEMY_DELAY
 
     # returns whether an enemy is overlapped with the player
-    def get_collision(self, enemyx, enemyy, width, height, x,y):
+    def get_collision(self, enemyx, enemyy, x, y):
         collision = False
         radius = Constants.ENEMY_SIZE/20
-        dist = math.hypot(x -enemyx, y - enemyy)
+        dist = math.hypot(x - enemyx, y - enemyy)
         if dist < radius:
             if self.enemy_delay <= 0:
                 self.lose_live = True
@@ -887,8 +918,8 @@ class Player(pygame.sprite.Sprite):
         self.rect.centerx = Constants.WIDTH / 2
         self.rect.bottom = Constants.HEIGHT - 200
         self.speedx = 0
-        self.centerx = Constants.WIDTH /2
-        self.centery = Constants.HEIGHT/2
+        self.centerx = Constants.WIDTH / 2
+        self.centery = Constants.HEIGHT / 2
 
     # Update the player position
     def set_player_coordinates(self, x, y):
@@ -912,16 +943,16 @@ class Player(pygame.sprite.Sprite):
 
 
 """
-This class is responsible for the Crosshair used for aiming 
+This class is responsible for the Crosshair used for aiming
 """
 
 
 class Crosshairs(pygame.sprite.Sprite):
     def __init__(self):
         pygame.sprite.Sprite.__init__(self)
-        self.image = Constants.CROSSHAIR_IMAGE # set crosshair image
+        self.image = Constants.CROSSHAIR_IMAGE  # set crosshair image
         self.image = pygame.transform.scale(self.image, (Constants.CROSSHAIR_SIZE, Constants.CROSSHAIR_SIZE))
-        self.image.set_colorkey((0,0,0))
+        self.image.set_colorkey((0, 0, 0))
         self.rect = self.image.get_rect()
 
         pygame.mouse.set_visible(0)  # Make Mouse Cursor invisible
@@ -934,7 +965,7 @@ class Crosshairs(pygame.sprite.Sprite):
 
 
 """
-This class is responsible for the activity recognition. It is used for detecting the reload gesture 
+This class is responsible for the activity recognition. It is used for detecting the reload gesture
 (poining the wiimote upwards -> shake the wiimote -> point the wiimote forwards)
 The code for this class has been taken from the solution for Assignment08 by Andrea Fischer and Vitus Maierhöfer
 """
@@ -1201,18 +1232,15 @@ class GestureRecognizer:
 
     def recognize(self, points):
         """calculates the distance between points and templates and returns the number of template
-        if there is no recognition -1 is returned"""
-        numGesture = -1
+        if there is no recognition False is returned"""
         b = np.inf
         angle = 45
         a = 2
         for i in range(len(self.gestures)):
             template = self.gestures[i]
             d = self.distanceAtBestAngle(points, template, - angle, angle, a)
-            print(self.names[i], d)
             if d < b:
                 b = d
-                numGesture = i
         if b < 15:
             return True
         else:
@@ -1256,7 +1284,7 @@ class GestureRecognizer:
 
 
 """
-This class gets the coordinates of four LEDs as input params and calculates the coordinates of point the player 
+This class gets the coordinates of four LEDs as input params and calculates the coordinates of point the player
 is pointing at.
 """
 
@@ -1271,7 +1299,7 @@ class Pointing:
         C = led_three
         D = led_four
 
-        #The following 16 lines of code responsible for sorting are taken from the file "transform.py"
+        # The following 16 lines of code responsible for sorting are taken from the file "transform.py"
         # of Andrea Fischers and Miriam Schlindweins solution of of Assignment09
         points = [A, B, C, D]
         points = sorted(points, key=lambda k: k[0])
@@ -1290,7 +1318,7 @@ class Pointing:
             D = points[3]
             C = points[2]
 
-         # Step 1
+        # Step 1
         source_points_123 = np.matrix([[A[0], B[0], C[0]], [A[1], B[1], C[1]], [1, 1, 1]])
         source_point_4 = [[D[0]], [D[1]], [1]]
 
@@ -1298,7 +1326,7 @@ class Pointing:
         l, m, t = [float(x) for x in scale_to_source]
 
         # Step 2
-        unit_to_source = np.matrix([[l * A[0], m * B[0], t * C[0]], [l * A[1], m * B[1], t* C[1]], [l, m, t]])
+        unit_to_source = np.matrix([[l * A[0], m * B[0], t * C[0]], [l * A[1], m * B[1], t * C[1]], [l, m, t]])
 
         # Step 3
         A2 = 0, Constants.HEIGHT
@@ -1306,12 +1334,12 @@ class Pointing:
         C2 = Constants.WIDTH, 0
         D2 = Constants.WIDTH, Constants.HEIGHT
 
-        dest_points_123 = np.matrix([[A2[0], B2[0], C2[0]], [A2[1], B2[1], C2[1]], [1 , 1, 1]])
+        dest_points_123 = np.matrix([[A2[0], B2[0], C2[0]], [A2[1], B2[1], C2[1]], [1, 1, 1]])
 
         dest_point_4 = np.matrix([[D2[0]], [D2[1]], [1]])
 
         scale_to_dest = np.linalg.solve(dest_points_123, dest_point_4)
-        l,m,t = [float(x) for x in scale_to_dest]
+        l, m, t = [float(x) for x in scale_to_dest]
 
         unit_to_dest = np.matrix([[l * A2[0], m * B2[0], t * C2[0]], [l * A2[1], m * B2[1], t * C2[1]],  [l, m, t]])
 
@@ -1319,13 +1347,14 @@ class Pointing:
         try:
             source_to_unit = np.linalg.inv(unit_to_source)
         except np.linalg.linalg.LinAlgError:
-            return 0,0
+            return 0, 0
 
         # Step 5: Compute the combined matrix
         source_to_dest = unit_to_dest @ source_to_unit
 
-        # Step 6: To map a location  (x,y)  from the source image to its corresponding location in the destination image, compute the product
-        x,y,z = [float(w) for w in (source_to_dest @ np.matrix([[512], [384], [1]]))]
+        # Step 6: To map a location  (x,y)  from the source image to its corresponding location in the destination
+        # image, compute the product
+        x, y, z = [float(w) for w in (source_to_dest @ np.matrix([[512], [384], [1]]))]
 
         # step 7: dehomogenization
         x = int(x / z)
@@ -1335,7 +1364,7 @@ class Pointing:
 
 
 """
-This class gets the coordinates of the two LEDs of the head tracking device as input and calculates the position of 
+This class gets the coordinates of the two LEDs of the head tracking device as input and calculates the position of
 the player on the screen.
 """
 
@@ -1344,14 +1373,18 @@ class Tracking:
 
     def process_ir_data_two_leds(self, left, right):
 
-        # Since we want direct movement (e.g move head up -> move player on screen up), the coordinate points need to be inverted. Otherwise, movements will be in the wrong direction
+        # Since we want direct movement (e.g move head up -> move player on screen up), the coordinate points need
+        # to be inverted. Otherwise, movements will be in the wrong direction
         inverted_left = (Constants.WIIMOTE_IR_CAM_WIDTH - left[0], Constants.WIIMOTE_IR_CAM_HEIGHT - left[1])
         inverted_right = (Constants.WIIMOTE_IR_CAM_WIDTH - right[0], Constants.WIIMOTE_IR_CAM_HEIGHT - right[1])
 
-        # After getting the coordinates of the two LEDs, we need to calculate the point in the middle of the two coordinates. This is the center of our head.
+        # After getting the coordinates of the two LEDs, we need to calculate the point in the middle of the two
+        # coordinates. This is the center of our head.
         center = ((inverted_left[0] + inverted_right[0]) / 2, (inverted_left[1] + inverted_right[1]) / 2)
 
-        # The coordinates of the head center are for the resolution of the Wiimote IR Cam (1024x768). To position the player correctly on the screen, new coordinates need to be calculated, suited for the resolution of the screen.
+        # The coordinates of the head center are for the resolution of the Wiimote IR Cam (1024x768). To position
+        # the player correctly on the screen, new coordinates need to be calculated, suited for
+        # the resolution of the screen.
         x_on_screen = int((center[0] / Constants.WIIMOTE_IR_CAM_WIDTH) * Constants.WIDTH)
         y_on_screen = int((center[1] / Constants.WIIMOTE_IR_CAM_HEIGHT) * Constants.HEIGHT)
 
