@@ -38,6 +38,7 @@ pygame.init()
 """For easy access to constants from all classes, they had been put into their own class"""
 class Constants:
     WIIMOTE_IR_CAM_WIDTH = 1024
+    FPS = 60
     ENEMY_DELAY = 30
     DURATION_BETWEEN_ENEMIES = 150
     WIIMOTE_IR_CAM_HEIGHT = 768
@@ -45,8 +46,8 @@ class Constants:
     WIIMOTE_IR_CAM_CENTER = (WIIMOTE_IR_CAM_WIDTH/2, WIIMOTE_IR_CAM_HEIGHT/2)
     MOVING_AVERAGE_NUM_VALUES = 5  # num of values that should be buffered for moving average filter
 
-    WIIMOTE_TRACKER_ADDRESS = "B8:AE:6E:55:B5:0F"
-    WIIMOTE_POINTER_ADDRESS = "00:1e:a9:36:9b:34"
+    WIIMOTE_TRACKER_ADDRESS = "B8:AE:6E:F1:39:81"
+    WIIMOTE_POINTER_ADDRESS = "B8:AE:6E:1B:5B:03"
 
     # The tracking of the head needs to be inverted if the tracking wiimote is behind and not in front of the player
     INVERT_HEAD_TRACKING_LEFT_RIGHT = False
@@ -98,6 +99,9 @@ class WiimoteGame:
         self.currently_drawing = False
         self.barricade = {}
 
+        self.enemies_at_once = 1
+        self.enemies_incrementor = 0
+
         self.bullet_holes = [] # The locations of all bullet holes are saved here
 
         self.player_name = ["A", "A", "A", "A", "A"]
@@ -116,11 +120,13 @@ class WiimoteGame:
         self.clock = pygame.time.Clock()
         self.init_sounds()
 
+    # sets up game canvas
     def init_canvas(self):
        self.drawInfoLine("Highscore: 0")
        self.drawGameCanvas()
        self.drawMunitionLine(Constants.MUNITION_COUNT, Constants.MAX_NUM_LIVES)
 
+    # draws the upper line that displays the highscore on the screen
     def drawInfoLine(self, text):
         self.info_line_top = pygame.Surface((Constants.WIDTH, 50))
         self.info_line_top = self.info_line_top.convert()
@@ -132,10 +138,12 @@ class WiimoteGame:
         self.info_line_top.blit(self.text, textpos)
         Constants.SCREEN.blit(self.info_line_top, (0, 0))
 
+    # draws the main game canvas
     def drawGameCanvas(self):
         self.game_canvas = pygame.Surface((Constants.WIDTH, Constants.HEIGHT))
         Constants.SCREEN.blit(self.game_canvas, (0, 50))
 
+    # draws the lower line on the canvas that displays the munition and lives of the player
     def drawMunitionLine(self, num_bullets, lives):
         self.munition_line = pygame.Surface((Constants.WIDTH, 50))
         self.munition_line.fill((250, 250, 250))
@@ -291,6 +299,7 @@ class WiimoteGame:
         while loop_running:
             self.loop_iteration()
 
+    # resets game after game over
     def reset_game(self):
         self.munition_counter = Constants.MUNITION_COUNT
         self.lives = Constants.MAX_NUM_LIVES
@@ -315,7 +324,7 @@ class WiimoteGame:
     # One iteration of the loop: 1/60 sec
     def loop_iteration(self):
 
-        self.clock.tick(60)
+        self.clock.tick(Constants.FPS)
         self.check_wiimote_input()
 
         if self.game_over == False:
@@ -447,7 +456,7 @@ class WiimoteGame:
                     self.drawing_y_values.append(cursor_pos[1])
 
             if self.currently_drawing == True:
-                print("Still Drawing")
+                print("")
             else:
                 print("Drawing Started")
                 self.barricade = {}
@@ -473,7 +482,6 @@ class WiimoteGame:
             self.reset_game()
 
     def on_wiimote_dpad_pressed(self, dir):
-        print(dir)
         if self.new_click_ok(time.time(), Constants.NAME_INPUT_SCROLL_SPEED):
             self.last_button_press = time.time()
             if dir == "Up":
@@ -567,7 +575,8 @@ class WiimoteGame:
             for enemy in self.enemies:
                 dist = math.hypot(x - enemy.rect.centerx, y - enemy.rect.centery)
                 # needs to be smaller than enemy radius
-                if dist <= 50:
+                radius = Constants.ENEMY_SIZE/2
+                if dist < radius:
                     self.shot_enemy = True
                     self.shooted_enemy = enemy
         else:
@@ -581,29 +590,52 @@ class WiimoteGame:
 
     # checks if the player is overlapped by an enemy
     def check_enemy_behind(self):
+        x = pygame.mouse.get_pos()[0]
+        y = pygame.mouse.get_pos()[1]
         for enemy in self.enemies:
-            check_for_overlapping = enemy.get_collision()
+            check_for_overlapping = enemy.get_collision(enemy.rect.centerx, enemy.rect.centery,self.player.rect.width, self.player.rect.height, self.player.rect.centerx, self.player.rect.centery)
             if (check_for_overlapping == True):
+                if "barricade_x" in self.barricade.keys(): # check if barricade is displayed
+                    # if there is no collision between an enemy and the barricade that was drawn
+                    if self.check_barricade_collision(self.barricade["width"], self.barricade["height"], self.barricade["barricade_x"], self.barricade["barricade_y"]) == False:
+                        self.player_was_hit(enemy)
 
-                #TODO: CHECK HERE FOR BARRICADE
+                else: # if no barriacade is displayed, decrease lives
+                    self.player_was_hit(enemy)
 
-                enemy.reset()
-                self.play_sound("ouch")
-                if (self.lives > 1):
-                    self.lives -= 1
-                else:
-                    self.stop_music()
-                    self.play_sound("game_over")
-                    self.game_over = True
+    # decreases live of player and handles game over
+    def player_was_hit(self,enemy):
+        enemy.reset()
+        self.play_sound("ouch")
+        if (self.lives > 1):
+            self.lives -= 1
+        else:
+            self.stop_music()
+            self.play_sound("game_over")
+            self.game_over = True
 
-   # counts seconds and adds a new enemy after a certain time
+    # checks if an enemy is overlapped by a barricade
+    def check_barricade_collision(self, width,height,x,y):
+        collision_with_barricade = False
+        for enemy in self.enemies:
+            radius = Constants.ENEMY_SIZE/2
+            if enemy.rect.centerx + radius > x and enemy.rect.centerx + radius < x + width and enemy.rect.centery + radius < y + height and enemy.rect.centery > y:
+                collision_with_barricade = True
+        return  collision_with_barricade
+
+
+
+    # counts seconds and adds a new enemy after a certain time
     def check_level(self):
         position_arr_x = [0, Constants.WIDTH]
         position_arr_y = [0, Constants.HEIGHT]
-        if self.level_seconds_counter > Constants.DURATION_BETWEEN_ENEMIES:
+        if self.level_seconds_counter > Constants.DURATION_BETWEEN_ENEMIES: # adds an enemy every few ticks
             self.level_seconds_counter = 0
-            enemy = Enemy(1, position_arr_x[randint(0, 1)], position_arr_y[randint(0,1)], 1, randint(1,5))
-            self.enemies.add(enemy)
+
+            for x in range(0, self.enemies_at_once+1):
+                # adds an enemy that moves in from a random edge
+                enemy = Enemy(1, position_arr_x[randint(0, 1)], position_arr_y[randint(0,1)], 1, randint(1,5))
+                self.enemies.add(enemy)
         else:
             self.level_seconds_counter +=1
 
@@ -622,6 +654,10 @@ class WiimoteGame:
                     self.shoot_enemy_anim_iterator += 1
                 else:
                     self.highscore += 100
+                    self.enemies_incrementor += 100
+                    if self.enemies_incrementor >= 1000:
+                        self.enemies_at_once += 1
+                        self.enemies_incrementor =0
                     self.enemies.remove(self.shooted_enemy)
                     self.shot_enemy = False
                     self.shoot_enemy_anim_iterator = 0
@@ -653,6 +689,7 @@ class WiimoteGame:
         if predicted_activity == "reload":
             self.reload()
 
+    # handles the reloading of the munition
     def reload(self):
         if self.munition_counter == 0:
             self.play_sound("reload")
@@ -668,18 +705,15 @@ class Highscore:
     def read_data_from_csv(self):
         csv_files = glob.glob("*.csv")  # get all csv files from the directory
         for file in csv_files:
-            print(file)
             if file == "highscore.csv":
                 for line in open(file, "r").readlines():
                     name, points = line.split(',')
                     self.highscore_entries.append([name, int(points)])
-        print(self.highscore_entries)
 
     def get_highscore(self):
         return self.highscore_entries
 
     def update_highscore(self, name, points):
-        print("Updating Highscore", name, points)
         self.highscore_entries.append([name, points])
         # Sort a list of lists: https://stackoverflow.com/questions/4174941/how-to-sort-a-list-of-lists-by-a-specific-index-of-the-inner-list
         self.highscore_entries.sort(key=lambda x: x[1])
@@ -689,7 +723,6 @@ class Highscore:
         if len(self.highscore_entries) > 10:
             self.highscore_entries = self.highscore_entries[:10]
 
-        print(self.highscore_entries)
         self.update_csv_file()
 
     def update_csv_file(self):
@@ -752,48 +785,51 @@ class Enemy(pygame.sprite.Sprite):
         self.image = pygame.transform.scale(self.explosion_sprite[iterator], (90, 90))
         self.image.set_colorkey((0, 0, 0))
 
+    # gets the length of the image list that represents the explosion animation
     def get_explosion_duration(self):
         return len(self.explosion_sprite)
 
     # from https://stackoverflow.com/questions/20044791/how-to-make-an-enemy-follow-the-player-in-pygame
     def move_towards_player(self, Player):
-
-        self.image.set_colorkey((0, 0, 0))
+        self.image.set_colorkey((0, 0, 0)) # removes black background from transparent image
         speed = self.speed
         px = Player.rect.centerx
         py = Player.rect.centery
         # Movement along x direction
         if self.rect.centerx > px:
             self.rect.centerx -= speed
-            self.collisionX = False
             self.enemy_delay = Constants.ENEMY_DELAY
         elif self.rect.centerx < px:
             self.rect.centerx += speed
-            self.collisionX = False
             self.enemy_delay = Constants.ENEMY_DELAY
-        else:
-            self.collisionX = True
         # Movement along y direction
         if self.rect.centery < py:
             self.rect.centery += speed
-            self.collisionY = False
             self.enemy_delay = Constants.ENEMY_DELAY
         elif self.rect.centery > py:
             self.rect.centery -= speed
-            self.collisionY = False
             self.enemy_delay = Constants.ENEMY_DELAY
-        else:
-            self.collisionY = True
-        if self.collisionY == True & self.collisionX == True:
+        
+
+
+    # returns whether an enemy is overlapped with the player
+    def get_collision(self, enemyx, enemyy, width, height, x,y):
+        collision = False
+        radius = Constants.ENEMY_SIZE/20
+        dist = math.hypot(x -enemyx, y - enemyy)
+        if dist < radius:
+        #if self.rect.centerx + radius > x and self.rect.centerx + radius < x + width and self.rect.centery + radius < y + height and self.rect.centery > y:
+            print("coll")
             # adds a delay after that the player will lose a live
             if self.enemy_delay <= 0:
                 self.lose_live = True
             else:
                 self.enemy_delay -= 1
 
-    # returns whether an enemy is overlapped with the player
-    def get_collision(self):
-         return self.lose_live
+                collision = True
+        else:
+            print("nein")
+        return collision
 
     # resets enemy to start position
     def reset(self):
@@ -824,8 +860,7 @@ class Player(pygame.sprite.Sprite):
     def get_player_coordinates(self):
         return self.centerx, self.centery
 
-    # moves player based on keyboard input
-    # todo: change player movement by headtracking coordinates
+    # moves player with every tick based on user's position
     def update(self):
         self.speedx = 0
         self.speedy = 0
@@ -850,11 +885,10 @@ class Crosshairs(pygame.sprite.Sprite):
         self.image = pygame.transform.scale(self.image, (Constants.CROSSHAIR_SIZE, Constants.CROSSHAIR_SIZE))
         self.image.set_colorkey((0,0,0))
         self.rect = self.image.get_rect()
-
         # Make Mouse Cursor invisible
         pygame.mouse.set_visible(0)
 
-    # display crosshairs on mouse position
+    # updates crosshairs based on current mouse position with every tick
     def update(self):
         mousex, mousey = pygame.mouse.get_pos()
         self.rect.centerx = mousex
@@ -1119,14 +1153,11 @@ class GestureRecognizer:
         # iterate over all templates and check, which of them has the smallest distance to the entered gesture
         for i in range(len(templates)):
             d = self.distance_at_best_angle(points, templates[i], -math.radians(45), math.radians(45), 2)
-            print("Distance of " + self.template_names[i] + ": " + str(d))
             if d < b:
                 b = d
                 self.best_find = self.template_names[i]
 
         score = 1 - b / 0.5 * math.sqrt(self.SIZE**2 + self.SIZE**2)
-        print("Score: " + str(score))
-        print("Best find: " + self.best_find)
         return [self.best_find, score]
 
     # Function implemented like here: https://depts.washington.edu/madlab/proj/dollar/dollar.js
@@ -1215,7 +1246,6 @@ class GestureRecognizer:
         for i in range(1, len(points)):
             d += self.distance(points[i-1], points[i])
 
-        print("Length: " + str(d))
         return d
 
     # Done with Pythagoras c = sqrt((xA-xB)² + (yA-yB)²)
